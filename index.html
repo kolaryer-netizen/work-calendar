@@ -504,26 +504,9 @@
                 <input id="taskEndDate" type="date">
               </div>
             </div>
-            <div class="field">
-              <label for="taskTime">时间节点</label>
-              <input id="taskTime" type="time">
-            </div>
-            <div class="split">
-              <div class="field">
-                <label for="taskType">类型</label>
-                <select id="taskType">
-                  <option value="task">任务</option>
-                  <option value="milestone">时间节点</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="taskScope">周期</label>
-                <select id="taskScope">
-                  <option value="day">当天</option>
-                  <option value="week">本周</option>
-                </select>
-              </div>
-            </div>
+            <input id="taskTime" type="hidden" value="">
+            <input id="taskType" type="hidden" value="task">
+            <input id="taskScope" type="hidden" value="day">
             <div class="field">
               <label for="taskPriority">重要程度</label>
               <select id="taskPriority">
@@ -1101,7 +1084,6 @@
           <div class="meta">
             <span>${task.time || "未定时间"}</span>
             <span>${dateRangeLabel(task)}</span>
-            <span>${task.scope === "week" ? "本周任务" : "当天任务"}</span>
             ${origin ? `<span class="badge task-origin">${origin}</span>` : ""}
             <span class="badge priority p-${task.priority || "important_urgent"}">${priorityLabel(task.priority)}</span>
           </div>
@@ -1186,6 +1168,20 @@
 
     els.reloadCloudBtn.addEventListener("click", loadCloud);
 
+    function openStartDatePicker() {
+      if (!els.title.value.trim()) return;
+      els.date.focus();
+      try { els.date.showPicker?.(); } catch {}
+    }
+
+    els.title.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      openStartDatePicker();
+    });
+
+    els.title.addEventListener("change", openStartDatePicker);
+
     els.date.addEventListener("change", () => {
       if (!els.date.value) return;
       if (!els.endDate.value || els.endDate.value < els.date.value) {
@@ -1193,6 +1189,11 @@
       }
       els.endDate.focus();
       try { els.endDate.showPicker?.(); } catch {}
+    });
+
+    els.endDate.addEventListener("change", () => {
+      els.priority.focus();
+      try { els.priority.showPicker?.(); } catch {}
     });
 
     els.form.addEventListener("submit", async event => {
