@@ -273,7 +273,7 @@
     .week-task-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
     .week-task-form {
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) 170px auto;
+      grid-template-columns: minmax(180px, 1fr) auto;
       gap: 10px;
       align-items: end;
       padding: 12px;
@@ -288,6 +288,9 @@
       background: #fff;
       padding: 0;
       overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
     }
     .week-task-title { font-weight: 800; line-height: 1.35; }
     .week-task-summary {
@@ -303,16 +306,7 @@
       text-align: left;
     }
     .week-task-summary:hover { background: #fafafa; }
-    .week-task-details {
-      display: none;
-      padding: 12px 14px;
-      border-top: 1px solid var(--line);
-      background: #fbfaf8;
-    }
-    .week-task-card.expanded .week-task-details { display: grid; gap: 10px; }
-    .week-task-date-label { color: var(--muted); font-size: 13px; font-weight: 700; }
-    .weekday-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-    .weekday-buttons .btn { min-height: 30px; padding: 0 9px; font-size: 12px; }
+    .week-task-card > .task-actions { padding-right: 10px; }
     .hour-labels { background: #faf9f6; border-right: 1px solid var(--line); }
     .hour-label, .hour-row { min-height: 54px; border-bottom: 1px solid var(--line); padding: 8px 10px; color: var(--muted); font-size: 12px; }
     .hour-task { display: inline-flex; margin: 2px 6px 4px 0; border-radius: 7px; padding: 6px 8px; background: var(--accent-soft); color: #16488f; border-left: 4px solid var(--accent); }
@@ -354,7 +348,6 @@
     .task.p-important_not_urgent { border-left: 5px solid #2563eb; }
     .task.p-urgent_not_important { border-left: 5px solid #f59e0b; }
     .task.p-not_urgent_not_important { border-left: 5px solid #64748b; }
-    .week-task-card.task { padding: 0; display: block; overflow: hidden; }
     .priority-legend {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -476,7 +469,7 @@
         <div class="control">
           <button class="btn tab active" data-view="month" type="button">月</button>
           <button class="btn tab" data-view="week" type="button">周</button>
-          <button class="btn tab" data-view="weekTasks" type="button">周任务</button>
+          <button class="btn tab" data-view="weekTasks" type="button">任务列表</button>
         </div>
       </header>
 
@@ -1027,15 +1020,6 @@
             <label for="weekTaskTitle">工作内容</label>
             <input id="weekTaskTitle" autocomplete="off" placeholder="例如：整理广告数据、跟进供应商、复盘周报">
           </div>
-          <div class="field">
-            <label for="weekTaskPriority">重要程度</label>
-            <select id="weekTaskPriority">
-              <option value="important_urgent">重要紧急</option>
-              <option value="important_not_urgent">重要不紧急</option>
-              <option value="urgent_not_important">紧急不重要</option>
-              <option value="not_urgent_not_important">不紧急不重要</option>
-            </select>
-          </div>
           <button class="btn primary" type="submit">加入本周列表</button>
         </form>
         <div class="week-task-list" id="weekTaskList"></div>
@@ -1045,14 +1029,13 @@
       form.addEventListener("submit", async event => {
         event.preventDefault();
         const titleInput = form.querySelector("#weekTaskTitle");
-        const priorityInput = form.querySelector("#weekTaskPriority");
         const title = titleInput.value.trim();
         if (!title) return titleInput.focus();
         const item = {
           id: makeId(),
           weekStart: weekKey,
           title,
-          priority: priorityInput.value,
+          priority: "important_urgent",
           note: "",
           done: false
         };
@@ -1066,60 +1049,34 @@
       }
       items.forEach(item => {
         const card = document.createElement("article");
-        card.className = `week-task-card task p-${item.priority || "important_urgent"}`;
+        card.className = "week-task-card";
         card.innerHTML = `
-          <button class="week-task-summary" type="button" aria-expanded="false">
+          <button class="week-task-summary" type="button">
             <span class="week-task-title">${escapeHtml(item.title)}</span>
-            <span class="badge priority p-${item.priority || "important_urgent"}">${priorityLabel(item.priority)}</span>
           </button>
-          <div class="week-task-details">
-            <div class="week-task-date-label">请选择任务日期</div>
-            <div class="weekday-buttons"></div>
-            <div class="task-actions"><button class="text-btn danger delete-week-task" type="button">删除</button></div>
-          </div>
+          <div class="task-actions"><button class="text-btn danger delete-week-task" type="button">删除</button></div>
         `;
         const summary = card.querySelector(".week-task-summary");
-        summary.addEventListener("click", () => {
-          const expanded = card.classList.toggle("expanded");
-          summary.setAttribute("aria-expanded", String(expanded));
-        });
-        const buttons = card.querySelector(".weekday-buttons");
-        for (let index = 0; index < 7; index++) {
-          const day = addDays(weekStart, index);
-          const btn = document.createElement("button");
-          btn.className = "btn";
-          btn.type = "button";
-          btn.textContent = `${weekNames[day.getDay()]} ${day.getMonth() + 1}/${day.getDate()}`;
-          btn.addEventListener("click", () => scheduleWeeklyTask(item, day));
-          buttons.appendChild(btn);
-        }
+        summary.addEventListener("click", () => prepareWeeklyTask(item));
         card.querySelector(".delete-week-task").addEventListener("click", () => deleteWeeklyTask(item.id));
         list.appendChild(card);
       });
     }
 
-    async function scheduleWeeklyTask(item, day) {
-      const key = dateKey(day);
-      const task = {
-        id: makeId(),
-        title: item.title,
-        date: key,
-        endDate: key,
-        time: "",
-        type: "task",
-        scope: "week",
-        priority: item.priority || "important_urgent",
-        note: item.note || "",
-        done: false
-      };
-      state.tasks.push(task);
+    function prepareWeeklyTask(item) {
+      const day = parseDate(item.weekStart);
+      state.editingId = null;
       state.selected = day;
-      state.cursor = day;
-      state.view = "week";
-      saveLocal();
-      render();
-      await saveTask(task);
-      render();
+      els.form.reset();
+      els.title.value = item.title;
+      els.date.value = dateKey(day);
+      els.endDate.value = dateKey(day);
+      els.scope.value = "week";
+      els.priority.value = "important_urgent";
+      els.note.value = item.note || "";
+      els.submit.textContent = "添加到日历";
+      els.date.focus();
+      try { els.date.showPicker?.(); } catch {}
     }
 
     function renderSide() {
