@@ -219,6 +219,26 @@
     }
     .chip.done { color: var(--green); background: var(--green-soft); text-decoration: line-through; }
     .chip.milestone { color: var(--orange); background: var(--orange-soft); }
+    .chip.q-important_urgent {
+      border-left: 4px solid #dc2626;
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .chip.q-important_not_urgent {
+      border-left: 4px solid #2563eb;
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+    .chip.q-urgent_not_important {
+      border-left: 4px solid #f59e0b;
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .chip.q-not_urgent_not_important {
+      border-left: 4px solid #64748b;
+      background: #e2e8f0;
+      color: #475569;
+    }
 
     .week { display: none; grid-template-columns: repeat(7, minmax(130px, 1fr)); min-height: 660px; }
     .week.active { display: grid; }
@@ -267,6 +287,39 @@
     .task.done .task-title { color: var(--green); text-decoration: line-through; }
     .badge { border-radius: 999px; padding: 4px 8px; font-size: 12px; color: #16488f; background: var(--accent-soft); }
     .badge.milestone { color: var(--orange); background: var(--orange-soft); }
+    .badge.priority { color: #334155; background: #eef2f7; }
+    .badge.p-important_urgent { color: #991b1b; background: #fee2e2; }
+    .badge.p-important_not_urgent { color: #1d4ed8; background: #dbeafe; }
+    .badge.p-urgent_not_important { color: #92400e; background: #fef3c7; }
+    .badge.p-not_urgent_not_important { color: #475569; background: #e2e8f0; }
+    .task.p-important_urgent { border-left: 5px solid #dc2626; }
+    .task.p-important_not_urgent { border-left: 5px solid #2563eb; }
+    .task.p-urgent_not_important { border-left: 5px solid #f59e0b; }
+    .task.p-not_urgent_not_important { border-left: 5px solid #64748b; }
+    .priority-legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin: -2px 0 8px;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      min-width: 0;
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+    .legend-dot.red { background: #dc2626; }
+    .legend-dot.blue { background: #2563eb; }
+    .legend-dot.orange { background: #f59e0b; }
+    .legend-dot.gray { background: #64748b; }
     .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
     .note { margin: 0; color: #4b5563; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
     .task-actions { display: flex; justify-content: flex-end; gap: 8px; }
@@ -416,6 +469,21 @@
               </div>
             </div>
             <div class="field">
+              <label for="taskPriority">重要程度</label>
+              <select id="taskPriority">
+                <option value="important_urgent">重要紧急</option>
+                <option value="important_not_urgent">重要不紧急</option>
+                <option value="urgent_not_important">紧急不重要</option>
+                <option value="not_urgent_not_important">不紧急不重要</option>
+              </select>
+            </div>
+            <div class="priority-legend">
+              <span class="legend-item"><i class="legend-dot red"></i>重要紧急</span>
+              <span class="legend-item"><i class="legend-dot blue"></i>重要不紧急</span>
+              <span class="legend-item"><i class="legend-dot orange"></i>紧急不重要</span>
+              <span class="legend-item"><i class="legend-dot gray"></i>不紧急不重要</span>
+            </div>
+            <div class="field">
               <label for="taskNote">备注</label>
               <textarea id="taskNote" placeholder="补充负责人、资料、注意事项"></textarea>
             </div>
@@ -481,6 +549,7 @@
       time: document.getElementById("taskTime"),
       type: document.getElementById("taskType"),
       scope: document.getElementById("taskScope"),
+      priority: document.getElementById("taskPriority"),
       note: document.getElementById("taskNote"),
       submit: document.getElementById("submitBtn"),
       taskList: document.getElementById("taskList"),
@@ -527,6 +596,14 @@
       if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
       return `task-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     }
+    function priorityLabel(value) {
+      return {
+        important_urgent: "重要紧急",
+        important_not_urgent: "重要不紧急",
+        urgent_not_important: "紧急不重要",
+        not_urgent_not_important: "不紧急不重要"
+      }[value] || "重要紧急";
+    }
 
     function toDb(task) {
       return {
@@ -537,6 +614,7 @@
         task_time: task.time || null,
         task_type: task.type,
         task_scope: task.scope,
+        task_priority: task.priority || "important_urgent",
         note: task.note || "",
         done: !!task.done
       };
@@ -549,6 +627,7 @@
         time: row.task_time ? row.task_time.slice(0, 5) : "",
         type: row.task_type,
         scope: row.task_scope,
+        priority: row.task_priority || "important_urgent",
         note: row.note || "",
         done: !!row.done
       };
@@ -713,8 +792,8 @@
         cell.innerHTML = `<div class="day-head"><span class="num">${day.getDate()}</span><span class="count">${tasks.length ? tasks.length + "项" : ""}</span></div>`;
         tasks.slice(0, 3).forEach(task => {
           const chip = document.createElement("div");
-          chip.className = `chip ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
-          chip.textContent = `${task.time ? task.time + " " : ""}${task.title}`;
+          chip.className = `chip q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
+          chip.textContent = `${task.done ? "✓ " : ""}${task.time ? task.time + " " : ""}${task.title}`;
           cell.appendChild(chip);
         });
         cell.addEventListener("click", () => {
@@ -796,14 +875,18 @@
       }
       tasks.forEach(task => {
         const card = document.createElement("article");
-        card.className = `task ${task.done ? "done" : ""}`;
+        card.className = `task p-${task.priority || "important_urgent"} ${task.done ? "done" : ""}`;
         card.innerHTML = `
           <div class="task-top">
             <input class="check" type="checkbox" ${task.done ? "checked" : ""}>
             <div class="task-title">${escapeHtml(task.title)}</div>
             <span class="badge ${task.type === "milestone" ? "milestone" : ""}">${task.type === "milestone" ? "节点" : "任务"}</span>
           </div>
-          <div class="meta"><span>${task.time || "未定时间"}</span><span>${task.scope === "week" ? "本周任务" : "当天任务"}</span></div>
+          <div class="meta">
+            <span>${task.time || "未定时间"}</span>
+            <span>${task.scope === "week" ? "本周任务" : "当天任务"}</span>
+            <span class="badge priority p-${task.priority || "important_urgent"}">${priorityLabel(task.priority)}</span>
+          </div>
           ${task.note ? `<p class="note">${escapeHtml(task.note)}</p>` : ""}
           <div class="task-actions"><button class="text-btn edit" type="button">编辑</button><button class="text-btn danger delete" type="button">删除</button></div>
         `;
@@ -839,6 +922,7 @@
       els.time.value = task.time || "";
       els.type.value = task.type;
       els.scope.value = task.scope;
+      els.priority.value = task.priority || "important_urgent";
       els.note.value = task.note || "";
       els.submit.textContent = "保存修改";
       render();
@@ -861,6 +945,7 @@
         time: els.time.value,
         type: els.type.value,
         scope: els.scope.value,
+        priority: els.priority.value,
         note: els.note.value.trim()
       };
       let task;
