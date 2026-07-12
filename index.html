@@ -106,6 +106,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      object-fit: cover;
+      border: 2px solid rgba(255,255,255,.7);
       font-weight: 800;
       font-size: 18px;
     }
@@ -408,7 +410,7 @@
   <main class="app">
     <aside class="sidebar">
       <section class="brand">
-        <h1>云同步工作任务日历</h1>
+        <h1>日历</h1>
         <p id="todayText"></p>
       </section>
 
@@ -434,9 +436,9 @@
         </div>
         <div id="profilePanel" class="hidden">
           <div class="profile">
-            <div class="avatar" id="userAvatar">U</div>
+            <img class="avatar" id="userAvatar" src="cartoon-avatar-v2.png" alt="卡通小熊猫头像">
             <div>
-              <strong id="userEmail">已登录</strong>
+              <strong id="userEmail">栗栗日程官</strong>
               <span>云端同步已开启</span>
             </div>
           </div>
@@ -882,8 +884,7 @@
         const email = state.user.email || "";
         els.loginForm.classList.add("hidden");
         els.profilePanel.classList.remove("hidden");
-        els.userEmail.textContent = email;
-        els.userAvatar.textContent = (email[0] || "U").toUpperCase();
+        els.userEmail.textContent = "栗栗日程官";
         setAuthStatus("已登录");
       } else {
         els.loginForm.classList.remove("hidden");
@@ -988,7 +989,7 @@
       item.type = "button";
       item.className = `time-card q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
       const origin = taskOriginLabel(task);
-      item.innerHTML = `<strong>${task.time || "未定时间"}</strong><span>${escapeHtml(task.title)}${origin ? ` <span class="task-origin">${origin}</span>` : ""}</span>`;
+      item.innerHTML = `${task.time ? `<strong>${task.time}</strong>` : ""}<span>${escapeHtml(task.title)}${origin ? ` <span class="task-origin">${origin}</span>` : ""}</span>`;
       item.addEventListener("click", () => {
         state.selected = parseDate(task.date);
         startEdit(task.id);
@@ -1129,7 +1130,7 @@
             <span class="badge ${task.type === "milestone" ? "milestone" : ""}">${task.type === "milestone" ? "时间节点" : "任务"}</span>
           </div>
           <div class="meta">
-            <span>${task.time || "未定时间"}</span>
+            ${task.time ? `<span>${task.time}</span>` : ""}
             <span>${dateRangeLabel(task)}</span>
             ${origin ? `<span class="badge task-origin">${origin}</span>` : ""}
             <span class="badge priority p-${task.priority || "important_urgent"}">${priorityLabel(task.priority)}</span>
