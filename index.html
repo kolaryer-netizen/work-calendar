@@ -685,6 +685,17 @@
         done: !!task.done
       };
     }
+    async function upsertTaskCloud(task) {
+      const payload = toDb(task);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const result = await state.supabase.from("calendar_tasks").upsert(payload, { onConflict: "id" });
+        if (!result.error) return null;
+        const missing = (result.error.message || "").match(/task_(?:end_date|scope|priority)/i)?.[0];
+        if (!missing || !(missing in payload)) return result.error;
+        delete payload[missing];
+      }
+      return new Error("云端任务表字段不完整");
+    }
     function fromDb(row) {
       return {
         id: row.id,
@@ -738,7 +749,7 @@
         setCloudStatus("本地已保存，登录后可同步云端");
         return;
       }
-      const { error } = await state.supabase.from("calendar_tasks").upsert(toDb(task), { onConflict: "id" });
+      const error = await upsertTaskCloud(task);
       if (error) setCloudStatus(`云端保存失败：${error.message}`);
       else setCloudStatus("云端已同步");
     }
@@ -810,8 +821,13 @@
     async function syncLocalToCloud() {
       if (!state.supabase || !state.user) return;
       if (state.tasks.length) {
-        const { error } = await state.supabase.from("calendar_tasks").upsert(state.tasks.map(toDb), { onConflict: "id" });
-        if (error) setCloudStatus(`本地任务同步失败：${error.message}`);
+        for (const task of state.tasks) {
+          const error = await upsertTaskCloud(task);
+          if (error) {
+            setCloudStatus(`本地任务同步失败：${error.message}`);
+            break;
+          }
+        }
       }
       if (state.weeklyTasks.length) {
         const { error } = await state.supabase.from("weekly_task_items").upsert(state.weeklyTasks.map(weeklyToDb), { onConflict: "id" });
@@ -886,6 +902,9 @@
     }
 
     function renderHeader() {
+      document.querySelectorAll(".tab[data-view]").forEach(button => {
+        button.classList.toggle("active", button.dataset.view === state.view);
+      });
       if (state.view === "month") {
         els.periodTitle.textContent = `${state.cursor.getFullYear()}年${state.cursor.getMonth() + 1}月`;
         els.periodSubtitle.textContent = "按月查看任务分布和时间节点";
@@ -1067,6 +1086,10 @@
       };
       state.tasks.push(task);
       state.selected = day;
+      state.cursor = day;
+      state.view = "week";
+      saveLocal();
+      render();
       await saveTask(task);
       render();
     }
@@ -1146,6 +1169,37 @@
       els.endDate.value = dateKey(state.selected);
       els.submit.textContent = "添加任务";
     }
+
+    document.querySelectorAll(".tab[data-view]").forEach(button => {
+      button.addEventListener("click", () => {
+        state.view = button.dataset.view;
+        render();
+      });
+    });
+
+    els.prevBtn.addEventListener("click", () => {
+      state.cursor = state.view === "month"
+        ? new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1)
+        : addDays(state.cursor, -7);
+      state.selected = new Date(state.cursor);
+      render();
+    });
+
+    els.nextBtn.addEventListener("click", () => {
+      state.cursor = state.view === "month"
+        ? new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1)
+        : addDays(state.cursor, 7);
+      state.selected = new Date(state.cursor);
+      render();
+    });
+
+    els.todayBtn.addEventListener("click", () => {
+      state.cursor = new Date();
+      state.selected = new Date();
+      render();
+    });
+
+    els.reloadCloudBtn.addEventListener("click", loadCloud);
 
     els.form.addEventListener("submit", async event => {
       event.preventDefault();
