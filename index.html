@@ -219,6 +219,10 @@
     }
     .chip.done { color: var(--green); background: var(--green-soft); text-decoration: line-through; }
     .chip.milestone { color: var(--orange); background: var(--orange-soft); }
+    .chip.range { margin-left: -8px; margin-right: -8px; border-radius: 0; }
+    .chip.range-start { margin-left: 0; border-radius: 7px 0 0 7px; }
+    .chip.range-end { margin-right: 0; border-radius: 0 7px 7px 0; }
+    .chip.range-single { margin-left: 0; margin-right: 0; border-radius: 7px; }
     .chip.q-important_urgent {
       border-left: 4px solid #dc2626;
       background: #fee2e2;
@@ -452,13 +456,17 @@
             </div>
             <div class="split">
               <div class="field">
-                <label for="taskDate">日期</label>
+                <label for="taskDate">开始日期</label>
                 <input id="taskDate" type="date">
               </div>
               <div class="field">
-                <label for="taskTime">时间节点</label>
-                <input id="taskTime" type="time">
+                <label for="taskEndDate">结束日期</label>
+                <input id="taskEndDate" type="date">
               </div>
+            </div>
+            <div class="field">
+              <label for="taskTime">时间节点</label>
+              <input id="taskTime" type="time">
             </div>
             <div class="split">
               <div class="field">
@@ -554,6 +562,7 @@
       form: document.getElementById("taskForm"),
       title: document.getElementById("taskTitle"),
       date: document.getElementById("taskDate"),
+      endDate: document.getElementById("taskEndDate"),
       time: document.getElementById("taskTime"),
       type: document.getElementById("taskType"),
       scope: document.getElementById("taskScope"),
@@ -595,7 +604,17 @@
       return [...tasks].sort((a, b) => `${a.date} ${a.time || "99:99"}`.localeCompare(`${b.date} ${b.time || "99:99"}`));
     }
     function tasksForDay(date) {
-      return sortedTasks(state.tasks.filter(task => task.date === dateKey(date)));
+      const key = dateKey(date);
+      return sortedTasks(state.tasks.filter(task => key >= task.date && key <= (task.endDate || task.date)));
+    }
+    function rangeClass(task, day) {
+      const key = dateKey(day);
+      const start = task.date;
+      const end = task.endDate || task.date;
+      if (start === end) return "range-single";
+      if (key === start) return "range range-start";
+      if (key === end) return "range range-end";
+      return "range";
     }
     function escapeHtml(value) {
       return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -612,6 +631,10 @@
         not_urgent_not_important: "不紧急不重要"
       }[value] || "重要紧急";
     }
+    function dateRangeLabel(task) {
+      const end = task.endDate || task.date;
+      return task.date === end ? task.date : `${task.date} 至 ${end}`;
+    }
 
     function toDb(task) {
       return {
@@ -619,6 +642,7 @@
         user_id: state.user.id,
         title: task.title,
         task_date: task.date,
+        task_end_date: task.endDate || task.date,
         task_time: task.time || null,
         task_type: task.type,
         task_scope: task.scope,
@@ -632,6 +656,7 @@
         id: row.id,
         title: row.title,
         date: row.task_date,
+        endDate: row.task_end_date || row.task_date,
         time: row.task_time ? row.task_time.slice(0, 5) : "",
         type: row.task_type,
         scope: row.task_scope,
@@ -753,7 +778,10 @@
 
     function render() {
       els.todayText.textContent = formatCn(new Date());
-      els.date.value = dateKey(state.selected);
+      if (!state.editingId) {
+        els.date.value = dateKey(state.selected);
+        els.endDate.value = dateKey(state.selected);
+      }
       renderHeader();
       renderCalendar();
       renderSide();
@@ -800,7 +828,7 @@
         cell.innerHTML = `<div class="day-head"><span class="num">${day.getDate()}</span><span class="count">${tasks.length ? tasks.length + "项" : ""}</span></div>`;
         tasks.slice(0, 3).forEach(task => {
           const chip = document.createElement("div");
-          chip.className = `chip q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
+          chip.className = `chip ${rangeClass(task, day)} q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
           chip.textContent = `${task.time ? task.time + " " : ""}${task.title}`;
           cell.appendChild(chip);
         });
@@ -892,6 +920,7 @@
           </div>
           <div class="meta">
             <span>${task.time || "未定时间"}</span>
+            <span>${dateRangeLabel(task)}</span>
             <span>${task.scope === "week" ? "本周任务" : "当天任务"}</span>
             <span class="badge priority p-${task.priority || "important_urgent"}">${priorityLabel(task.priority)}</span>
           </div>
@@ -927,6 +956,7 @@
       state.editingId = id;
       els.title.value = task.title;
       els.date.value = task.date;
+      els.endDate.value = task.endDate || task.date;
       els.time.value = task.time || "";
       els.type.value = task.type;
       els.scope.value = task.scope;
@@ -940,6 +970,7 @@
       state.editingId = null;
       els.form.reset();
       els.date.value = dateKey(state.selected);
+      els.endDate.value = dateKey(state.selected);
       els.submit.textContent = "添加任务";
     }
 
@@ -947,9 +978,14 @@
       event.preventDefault();
       const title = els.title.value.trim();
       if (!title) return els.title.focus();
+      const startDate = els.date.value || dateKey(state.selected);
+      const endDate = els.endDate.value || startDate;
+      const normalizedStart = startDate <= endDate ? startDate : endDate;
+      const normalizedEnd = startDate <= endDate ? endDate : startDate;
       const payload = {
         title,
-        date: els.date.value || dateKey(state.selected),
+        date: normalizedStart,
+        endDate: normalizedEnd,
         time: els.time.value,
         type: els.type.value,
         scope: els.scope.value,
