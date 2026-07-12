@@ -673,6 +673,37 @@
       return dateKey(startOfWeek(state.cursor));
     }
 
+    function taskDateKeys(task) {
+      const start = parseDate(task.date);
+      const end = parseDate(task.endDate || task.date);
+      const keys = [];
+      for (let day = start; day <= end; day = addDays(day, 1)) keys.push(dateKey(day));
+      return keys;
+    }
+    function normalizeTask(task) {
+      if (!Array.isArray(task.completedDates) || (task.done && task.completedDates.length === 0)) {
+        task.completedDates = task.done && task.date === (task.endDate || task.date) ? [task.date] : [];
+        if (task.date !== (task.endDate || task.date)) task.done = false;
+      }
+      return task;
+    }
+    function isTaskDoneOnDay(task, day) {
+      const key = typeof day === "string" ? day : dateKey(day);
+      return (task.completedDates || []).includes(key);
+    }
+    function storedTaskNote(task) {
+      const dates = task.completedDates || [];
+      return dates.length ? `${task.note || ""}\n[[done_dates:${dates.join(",")}]]` : (task.note || "");
+    }
+    function readStoredTaskNote(value) {
+      const source = value || "";
+      const match = source.match(/\n?\[\[done_dates:([^\]]*)\]\]$/);
+      return {
+        note: source.replace(/\n?\[\[done_dates:[^\]]*\]\]$/, ""),
+        completedDates: match && match[1] ? match[1].split(",").filter(Boolean) : []
+      };
+    }
+
     function toDb(task) {
       return {
         id: task.id,
@@ -684,7 +715,7 @@
         task_type: task.type,
         task_scope: task.scope,
         task_priority: task.priority || "important_urgent",
-        note: task.note || "",
+        note: storedTaskNote(task),
         done: !!task.done
       };
     }
@@ -700,7 +731,8 @@
       return new Error("云端任务表字段不完整");
     }
     function fromDb(row) {
-      return {
+      const stored = readStoredTaskNote(row.note);
+      return normalizeTask({
         id: row.id,
         title: row.title,
         date: row.task_date,
@@ -709,9 +741,10 @@
         type: row.task_type,
         scope: row.task_scope,
         priority: row.task_priority || "important_urgent",
-        note: row.note || "",
+        note: stored.note,
+        completedDates: stored.completedDates,
         done: !!row.done
-      };
+      });
     }
     function weeklyToDb(item) {
       return {
@@ -742,7 +775,7 @@
       localStorage.setItem(localWeeklyTaskKey, JSON.stringify(state.weeklyTasks));
     }
     function loadLocal() {
-      try { state.tasks = JSON.parse(localStorage.getItem(localTaskKey) || "[]"); }
+      try { state.tasks = JSON.parse(localStorage.getItem(localTaskKey) || "[]").map(normalizeTask); }
       catch { state.tasks = []; }
       try { state.weeklyTasks = JSON.parse(localStorage.getItem(localWeeklyTaskKey) || "[]"); }
       catch { state.weeklyTasks = []; }
@@ -782,12 +815,38 @@
     }
 
     async function deleteWeeklyTask(id) {
+      const weeklyItem = state.weeklyTasks.find(item => item.id === id);
+      const relatedTaskIds = [];
+      if (weeklyItem) {
+        const weekStart = weeklyItem.weekStart;
+        const weekEnd = dateKey(addDays(parseDate(weekStart), 6));
+        state.tasks.forEach(task => {
+          const taskEnd = task.endDate || task.date;
+          const isRelated = task.scope === "week"
+            && task.title === weeklyItem.title
+            && task.date <= weekEnd
+            && taskEnd >= weekStart;
+          if (isRelated) relatedTaskIds.push(task.id);
+        });
+      }
       state.weeklyTasks = state.weeklyTasks.filter(item => item.id !== id);
+      if (relatedTaskIds.length) {
+        const relatedIds = new Set(relatedTaskIds);
+        state.tasks = state.tasks.filter(task => !relatedIds.has(task.id));
+      }
       saveLocal();
       if (state.supabase && state.user) {
-        const { error } = await state.supabase.from("weekly_task_items").delete().eq("id", id);
-        if (error) setCloudStatus(`周任务删除失败：${error.message}`);
-        else setCloudStatus("周任务已删除");
+        const { error: weeklyError } = await state.supabase.from("weekly_task_items").delete().eq("id", id);
+        let taskError = null;
+        if (relatedTaskIds.length) {
+          const result = await state.supabase.from("calendar_tasks").delete().in("id", relatedTaskIds);
+          taskError = result.error;
+        }
+        if (weeklyError || taskError) {
+          setCloudStatus(`联动删除失败：${weeklyError?.message || taskError?.message}`);
+        } else {
+          setCloudStatus(`已删除任务列表项目及 ${relatedTaskIds.length} 项对应任务`);
+        }
       }
       render();
     }
@@ -951,7 +1010,7 @@
         cell.innerHTML = `<div class="day-head"><span class="num">${day.getDate()}</span><span class="count">${tasks.length ? tasks.length + "项" : ""}</span></div>`;
         tasks.slice(0, 3).forEach(task => {
           const chip = document.createElement("div");
-          chip.className = `chip ${rangeClass(task, day)} q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
+          chip.className = `chip ${rangeClass(task, day)} q-${task.priority || "important_urgent"} ${isTaskDoneOnDay(task, day) ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
           chip.textContent = `${task.time ? task.time + " " : ""}${task.title}`;
           cell.appendChild(chip);
         });
@@ -979,19 +1038,19 @@
         });
         const timeline = col.querySelector(".timeline");
         if (!tasks.length) timeline.innerHTML = `<div class="empty">暂无任务</div>`;
-        tasks.forEach(task => timeline.appendChild(timeCard(task)));
+        tasks.forEach(task => timeline.appendChild(timeCard(task, day)));
         els.weekView.appendChild(col);
       });
     }
 
-    function timeCard(task) {
+    function timeCard(task, day) {
       const item = document.createElement("button");
       item.type = "button";
-      item.className = `time-card q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
+      item.className = `time-card q-${task.priority || "important_urgent"} ${isTaskDoneOnDay(task, day) ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
       const origin = taskOriginLabel(task);
       item.innerHTML = `${task.time ? `<strong>${task.time}</strong>` : ""}<span>${escapeHtml(task.title)}${origin ? ` <span class="task-origin">${origin}</span>` : ""}</span>`;
       item.addEventListener("click", () => {
-        state.selected = parseDate(task.date);
+        state.selected = day;
         startEdit(task.id);
       });
       return item;
@@ -1113,19 +1172,21 @@
     function renderSide() {
       const tasks = tasksForDay(state.selected);
       els.selectedTitle.textContent = formatCn(state.selected);
-      els.selectedSummary.textContent = `${tasks.length} 项任务，${tasks.filter(task => task.done).length} 项已完成`;
+      const selectedKey = dateKey(state.selected);
+      els.selectedSummary.textContent = `${tasks.length} 项任务，${tasks.filter(task => isTaskDoneOnDay(task, selectedKey)).length} 项已完成`;
       els.taskList.innerHTML = "";
       if (!tasks.length) {
         els.taskList.innerHTML = `<div class="empty">这一天还没有任务</div>`;
         return;
       }
       tasks.forEach(task => {
+        const doneToday = isTaskDoneOnDay(task, selectedKey);
         const card = document.createElement("article");
-        card.className = `task p-${task.priority || "important_urgent"} ${task.done ? "done" : ""}`;
+        card.className = `task p-${task.priority || "important_urgent"} ${doneToday ? "done" : ""}`;
         const origin = taskOriginLabel(task);
         card.innerHTML = `
           <div class="task-top">
-            <input class="check" type="checkbox" ${task.done ? "checked" : ""}>
+            <input class="check" type="checkbox" ${doneToday ? "checked" : ""}>
             <div class="task-title">${escapeHtml(task.title)}</div>
             <span class="badge ${task.type === "milestone" ? "milestone" : ""}">${task.type === "milestone" ? "时间节点" : "任务"}</span>
           </div>
@@ -1139,7 +1200,11 @@
           <div class="task-actions"><button class="text-btn edit" type="button">编辑</button><button class="text-btn danger delete" type="button">删除</button></div>
         `;
         card.querySelector(".check").addEventListener("change", async event => {
-          task.done = event.target.checked;
+          const completed = new Set(task.completedDates || []);
+          if (event.target.checked) completed.add(selectedKey);
+          else completed.delete(selectedKey);
+          task.completedDates = [...completed].sort();
+          task.done = taskDateKeys(task).every(key => completed.has(key));
           await saveTask(task);
           render();
         });
@@ -1267,7 +1332,7 @@
         task = state.tasks.find(item => item.id === state.editingId);
         Object.assign(task, payload);
       } else {
-        task = { id: makeId(), done: false, ...payload };
+        task = { id: makeId(), done: false, completedDates: [], ...payload };
         state.tasks.push(task);
       }
       state.selected = parseDate(payload.date);
