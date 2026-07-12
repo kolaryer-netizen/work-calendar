@@ -86,6 +86,43 @@
     .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .status { font-size: 12px; line-height: 1.5; color: #cbd5e1; margin-top: 8px; }
     .status strong { color: #fff; }
+    .hidden { display: none !important; }
+    .profile {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.08);
+    }
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #dbeafe;
+      color: #1d4ed8;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+    }
+    .profile strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #fff;
+      font-size: 14px;
+    }
+    .profile span {
+      display: block;
+      color: #cbd5e1;
+      font-size: 12px;
+      margin-top: 3px;
+    }
 
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .stat { text-align: center; border-radius: 8px; padding: 10px 8px; background: rgba(255,255,255,.08); }
@@ -266,39 +303,41 @@
         <p id="todayText"></p>
       </section>
 
-      <section class="card">
-        <h2>Supabase 配置</h2>
-        <div class="field">
-          <label for="supabaseUrl">Project URL</label>
-          <input id="supabaseUrl" placeholder="https://xxxx.supabase.co">
-        </div>
-        <div class="field">
-          <label for="supabaseKey">anon public key</label>
-          <input id="supabaseKey" placeholder="eyJhbGciOi...">
-        </div>
-        <div class="btn-row">
-          <button class="btn primary" id="saveConfigBtn" type="button">保存配置</button>
-          <button class="btn ghost" id="reloadCloudBtn" type="button">刷新云端</button>
-        </div>
-        <div class="status" id="cloudStatus">未连接云端</div>
-      </section>
+      <input id="supabaseUrl" type="hidden">
+      <input id="supabaseKey" type="hidden">
+      <button class="hidden" id="saveConfigBtn" type="button">保存配置</button>
 
-      <section class="card">
-        <h2>登录账号</h2>
-        <div class="field">
-          <label for="email">邮箱</label>
-          <input id="email" type="email" autocomplete="email">
+      <section class="card" id="accountCard">
+        <h2>账号</h2>
+        <div id="loginForm">
+          <div class="field">
+            <label for="email">邮箱</label>
+            <input id="email" type="email" autocomplete="email">
+          </div>
+          <div class="field">
+            <label for="password">密码</label>
+            <input id="password" type="password" autocomplete="current-password">
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="signInBtn" type="button">登录</button>
+            <button class="btn ghost" id="signUpBtn" type="button">注册</button>
+          </div>
         </div>
-        <div class="field">
-          <label for="password">密码</label>
-          <input id="password" type="password" autocomplete="current-password">
-        </div>
-        <div class="btn-row">
-          <button class="btn primary" id="signInBtn" type="button">登录</button>
-          <button class="btn ghost" id="signUpBtn" type="button">注册</button>
-          <button class="btn danger" id="signOutBtn" type="button">退出</button>
+        <div id="profilePanel" class="hidden">
+          <div class="profile">
+            <div class="avatar" id="userAvatar">U</div>
+            <div>
+              <strong id="userEmail">已登录</strong>
+              <span>云端同步已开启</span>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn ghost" id="reloadCloudBtn" type="button">刷新云端</button>
+            <button class="btn danger" id="signOutBtn" type="button">退出</button>
+          </div>
         </div>
         <div class="status" id="authStatus">未登录</div>
+        <div class="status" id="cloudStatus">正在连接云端...</div>
       </section>
 
       <section class="card">
@@ -415,6 +454,10 @@
       saveConfigBtn: document.getElementById("saveConfigBtn"),
       reloadCloudBtn: document.getElementById("reloadCloudBtn"),
       cloudStatus: document.getElementById("cloudStatus"),
+      loginForm: document.getElementById("loginForm"),
+      profilePanel: document.getElementById("profilePanel"),
+      userAvatar: document.getElementById("userAvatar"),
+      userEmail: document.getElementById("userEmail"),
       email: document.getElementById("email"),
       password: document.getElementById("password"),
       signInBtn: document.getElementById("signInBtn"),
@@ -607,8 +650,18 @@
     }
 
     function updateAuthStatus() {
-      if (state.user) setAuthStatus(`已登录：<strong>${escapeHtml(state.user.email || "")}</strong>`);
-      else setAuthStatus("未登录");
+      if (state.user) {
+        const email = state.user.email || "";
+        els.loginForm.classList.add("hidden");
+        els.profilePanel.classList.remove("hidden");
+        els.userEmail.textContent = email;
+        els.userAvatar.textContent = (email[0] || "U").toUpperCase();
+        setAuthStatus("已登录");
+      } else {
+        els.loginForm.classList.remove("hidden");
+        els.profilePanel.classList.add("hidden");
+        setAuthStatus("未登录");
+      }
     }
 
     function render() {
