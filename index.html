@@ -258,12 +258,20 @@
     .time-card.done { border-left-color: var(--green); background: var(--green-soft); }
     .time-card.milestone { border-left-color: var(--orange); background: var(--orange-soft); }
     .time-card strong { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .time-card.q-important_urgent { border-left-color: #dc2626; background: #fee2e2; color: #991b1b; }
+    .time-card.q-important_not_urgent { border-left-color: #2563eb; background: #dbeafe; color: #1d4ed8; }
+    .time-card.q-urgent_not_important { border-left-color: #f59e0b; background: #fef3c7; color: #92400e; }
+    .time-card.q-not_urgent_not_important { border-left-color: #64748b; background: #e2e8f0; color: #475569; }
 
     .dayview { display: none; grid-template-columns: 82px minmax(0,1fr); min-height: 660px; }
     .dayview.active { display: grid; }
     .hour-labels { background: #faf9f6; border-right: 1px solid var(--line); }
     .hour-label, .hour-row { min-height: 54px; border-bottom: 1px solid var(--line); padding: 8px 10px; color: var(--muted); font-size: 12px; }
-    .hour-task { display: inline-flex; margin: 2px 6px 4px 0; border-radius: 7px; padding: 6px 8px; background: var(--accent-soft); color: #16488f; }
+    .hour-task { display: inline-flex; margin: 2px 6px 4px 0; border-radius: 7px; padding: 6px 8px; background: var(--accent-soft); color: #16488f; border-left: 4px solid var(--accent); }
+    .hour-task.q-important_urgent { border-left-color: #dc2626; background: #fee2e2; color: #991b1b; }
+    .hour-task.q-important_not_urgent { border-left-color: #2563eb; background: #dbeafe; color: #1d4ed8; }
+    .hour-task.q-urgent_not_important { border-left-color: #f59e0b; background: #fef3c7; color: #92400e; }
+    .hour-task.q-not_urgent_not_important { border-left-color: #64748b; background: #e2e8f0; color: #475569; }
 
     .side { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
     .side-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); }
@@ -793,7 +801,7 @@
         tasks.slice(0, 3).forEach(task => {
           const chip = document.createElement("div");
           chip.className = `chip q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
-          chip.textContent = `${task.done ? "✓ " : ""}${task.time ? task.time + " " : ""}${task.title}`;
+          chip.textContent = `${task.time ? task.time + " " : ""}${task.title}`;
           cell.appendChild(chip);
         });
         cell.addEventListener("click", () => {
@@ -828,7 +836,7 @@
     function timeCard(task) {
       const item = document.createElement("button");
       item.type = "button";
-      item.className = `time-card ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
+      item.className = `time-card q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
       item.innerHTML = `<strong>${task.time || "未定时间"}</strong><span>${escapeHtml(task.title)}</span>`;
       item.addEventListener("click", () => {
         state.selected = parseDate(task.date);
@@ -853,7 +861,7 @@
         tasks.filter(task => task.time ? Number(task.time.slice(0, 2)) === hour : hour === 7).forEach(task => {
           const tag = document.createElement("button");
           tag.type = "button";
-          tag.className = "hour-task";
+          tag.className = `hour-task q-${task.priority || "important_urgent"}`;
           tag.textContent = `${task.time || "未定"} ${task.title}`;
           tag.addEventListener("click", () => startEdit(task.id));
           row.appendChild(tag);
