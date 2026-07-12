@@ -678,7 +678,7 @@
       return task.date === end ? task.date : `${task.date} 至 ${end}`;
     }
     function taskOriginLabel(task) {
-      return task.scope === "week" ? "WK" : "";
+      return "";
     }
     function currentWeekStartKey() {
       return dateKey(startOfWeek(state.cursor));
@@ -961,7 +961,7 @@
         tasks.slice(0, 3).forEach(task => {
           const chip = document.createElement("div");
           chip.className = `chip ${rangeClass(task, day)} q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
-          chip.textContent = `${task.scope === "week" ? "WK·" : ""}${task.time ? task.time + " " : ""}${task.title}`;
+          chip.textContent = `${task.time ? task.time + " " : ""}${task.title}`;
           cell.appendChild(chip);
         });
         cell.addEventListener("click", () => {
