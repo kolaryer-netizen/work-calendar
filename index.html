@@ -267,8 +267,32 @@
     .time-card.q-urgent_not_important { border-left-color: #f59e0b; background: #fef3c7; color: #92400e; }
     .time-card.q-not_urgent_not_important { border-left-color: #64748b; background: #e2e8f0; color: #475569; }
 
-    .dayview { display: none; grid-template-columns: 82px minmax(0,1fr); min-height: 660px; }
-    .dayview.active { display: grid; }
+    .week-task-view { display: none; min-height: 660px; padding: 18px; overflow: auto; }
+    .week-task-view.active { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 14px; }
+    .week-task-head h3 { margin: 0; font-size: 20px; }
+    .week-task-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+    .week-task-form {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 170px auto;
+      gap: 10px;
+      align-items: end;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfaf8;
+    }
+    .week-task-list { display: grid; gap: 10px; align-content: start; }
+    .week-task-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .week-task-title { font-weight: 800; line-height: 1.35; }
+    .weekday-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+    .weekday-buttons .btn { min-height: 30px; padding: 0 9px; font-size: 12px; }
     .hour-labels { background: #faf9f6; border-right: 1px solid var(--line); }
     .hour-label, .hour-row { min-height: 54px; border-bottom: 1px solid var(--line); padding: 8px 10px; color: var(--muted); font-size: 12px; }
     .hour-task { display: inline-flex; margin: 2px 6px 4px 0; border-radius: 7px; padding: 6px 8px; background: var(--accent-soft); color: #16488f; border-left: 4px solid var(--accent); }
@@ -356,7 +380,7 @@
       .chip { font-size: 11px; padding: 4px 5px; }
       .week { grid-template-columns: 1fr; }
       .week-col { border-right: 0; border-bottom: 1px solid var(--line); }
-      .dayview { grid-template-columns: 62px 1fr; }
+      .week-task-form { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -429,7 +453,7 @@
         <div class="control">
           <button class="btn tab active" data-view="month" type="button">月</button>
           <button class="btn tab" data-view="week" type="button">周</button>
-          <button class="btn tab" data-view="day" type="button">日</button>
+          <button class="btn tab" data-view="weekTasks" type="button">周任务</button>
         </div>
       </header>
 
@@ -440,7 +464,7 @@
           </div>
           <div class="month" id="monthView"></div>
           <div class="week" id="weekView"></div>
-          <div class="dayview" id="dayView"></div>
+          <div class="week-task-view" id="weekTaskView"></div>
         </div>
 
         <aside class="panel side">
@@ -514,6 +538,7 @@
 
   <script>
     const localTaskKey = "cloud-calendar-local-tasks-v1";
+    const localWeeklyTaskKey = "cloud-calendar-weekly-tasks-v1";
     const configKey = "cloud-calendar-supabase-config-v1";
     const embeddedSupabaseConfig = {
       url: "https://scxsrgneitktymuxbxtg.supabase.co",
@@ -525,6 +550,7 @@
       cursor: new Date(),
       selected: new Date(),
       tasks: [],
+      weeklyTasks: [],
       editingId: null,
       supabase: null,
       user: null,
@@ -556,7 +582,7 @@
       weekdays: document.getElementById("weekdays"),
       monthView: document.getElementById("monthView"),
       weekView: document.getElementById("weekView"),
-      dayView: document.getElementById("dayView"),
+      weekTaskView: document.getElementById("weekTaskView"),
       selectedTitle: document.getElementById("selectedTitle"),
       selectedSummary: document.getElementById("selectedSummary"),
       form: document.getElementById("taskForm"),
@@ -635,6 +661,9 @@
       const end = task.endDate || task.date;
       return task.date === end ? task.date : `${task.date} 至 ${end}`;
     }
+    function currentWeekStartKey() {
+      return dateKey(startOfWeek(state.cursor));
+    }
 
     function toDb(task) {
       return {
@@ -665,13 +694,37 @@
         done: !!row.done
       };
     }
+    function weeklyToDb(item) {
+      return {
+        id: item.id,
+        user_id: state.user.id,
+        week_start: item.weekStart,
+        title: item.title,
+        task_priority: item.priority || "important_urgent",
+        note: item.note || "",
+        done: !!item.done
+      };
+    }
+    function weeklyFromDb(row) {
+      return {
+        id: row.id,
+        weekStart: row.week_start,
+        title: row.title,
+        priority: row.task_priority || "important_urgent",
+        note: row.note || "",
+        done: !!row.done
+      };
+    }
 
     function saveLocal() {
       localStorage.setItem(localTaskKey, JSON.stringify(state.tasks));
+      localStorage.setItem(localWeeklyTaskKey, JSON.stringify(state.weeklyTasks));
     }
     function loadLocal() {
       try { state.tasks = JSON.parse(localStorage.getItem(localTaskKey) || "[]"); }
       catch { state.tasks = []; }
+      try { state.weeklyTasks = JSON.parse(localStorage.getItem(localWeeklyTaskKey) || "[]"); }
+      catch { state.weeklyTasks = []; }
     }
 
     async function saveTask(task) {
@@ -696,6 +749,28 @@
       render();
     }
 
+    async function saveWeeklyTask(item) {
+      saveLocal();
+      if (!state.supabase || !state.user) {
+        setCloudStatus("周任务已本地保存，登录后可同步云端");
+        return;
+      }
+      const { error } = await state.supabase.from("weekly_task_items").upsert(weeklyToDb(item), { onConflict: "id" });
+      if (error) setCloudStatus(`周任务保存失败：${error.message}`);
+      else setCloudStatus("周任务已同步");
+    }
+
+    async function deleteWeeklyTask(id) {
+      state.weeklyTasks = state.weeklyTasks.filter(item => item.id !== id);
+      saveLocal();
+      if (state.supabase && state.user) {
+        const { error } = await state.supabase.from("weekly_task_items").delete().eq("id", id);
+        if (error) setCloudStatus(`周任务删除失败：${error.message}`);
+        else setCloudStatus("周任务已删除");
+      }
+      render();
+    }
+
     async function loadCloud() {
       if (!state.supabase || !state.user) return;
       state.syncing = true;
@@ -705,21 +780,38 @@
         .select("*")
         .order("task_date", { ascending: true })
         .order("task_time", { ascending: true });
-      state.syncing = false;
       if (error) {
+        state.syncing = false;
         setCloudStatus(`云端读取失败：${error.message}`);
         return;
       }
+      const { data: weeklyData, error: weeklyError } = await state.supabase
+        .from("weekly_task_items")
+        .select("*")
+        .order("week_start", { ascending: false })
+        .order("created_at", { ascending: true });
+      state.syncing = false;
+      if (weeklyError) {
+        setCloudStatus(`周任务读取失败：${weeklyError.message}`);
+        return;
+      }
       state.tasks = data.map(fromDb);
+      state.weeklyTasks = weeklyData.map(weeklyFromDb);
       saveLocal();
-      setCloudStatus(`云端已连接，已读取 ${state.tasks.length} 项任务`);
+      setCloudStatus(`云端已连接，已读取 ${state.tasks.length} 项任务、${state.weeklyTasks.length} 项周任务`);
       render();
     }
 
     async function syncLocalToCloud() {
-      if (!state.supabase || !state.user || !state.tasks.length) return;
-      const { error } = await state.supabase.from("calendar_tasks").upsert(state.tasks.map(toDb), { onConflict: "id" });
-      if (error) setCloudStatus(`本地同步到云端失败：${error.message}`);
+      if (!state.supabase || !state.user) return;
+      if (state.tasks.length) {
+        const { error } = await state.supabase.from("calendar_tasks").upsert(state.tasks.map(toDb), { onConflict: "id" });
+        if (error) setCloudStatus(`本地同步到云端失败：${error.message}`);
+      }
+      if (state.weeklyTasks.length) {
+        const { error } = await state.supabase.from("weekly_task_items").upsert(state.weeklyTasks.map(weeklyToDb), { onConflict: "id" });
+        if (error) setCloudStatus(`本地周任务同步失败：${error.message}`);
+      }
     }
 
     function setCloudStatus(text) { els.cloudStatus.innerHTML = text; }
@@ -799,9 +891,11 @@
         els.periodTitle.textContent = `${start.getMonth() + 1}月${start.getDate()}日 - ${end.getMonth() + 1}月${end.getDate()}日`;
         els.periodSubtitle.textContent = "按周安排重点工作和每日任务流";
       }
-      if (state.view === "day") {
-        els.periodTitle.textContent = formatCn(state.selected);
-        els.periodSubtitle.textContent = "按时间节点查看当天安排";
+      if (state.view === "weekTasks") {
+        const start = startOfWeek(state.cursor);
+        const end = addDays(start, 6);
+        els.periodTitle.textContent = `${start.getMonth() + 1}月${start.getDate()}日 - ${end.getMonth() + 1}月${end.getDate()}日`;
+        els.periodSubtitle.textContent = "先列出本周工作，再安排到具体日期";
       }
     }
 
@@ -809,10 +903,10 @@
       els.weekdays.style.display = state.view === "month" ? "grid" : "none";
       els.monthView.style.display = state.view === "month" ? "grid" : "none";
       els.weekView.classList.toggle("active", state.view === "week");
-      els.dayView.classList.toggle("active", state.view === "day");
+      els.weekTaskView.classList.toggle("active", state.view === "weekTasks");
       renderMonth();
       renderWeek();
-      renderDay();
+      renderWeekTasks();
     }
 
     function renderMonth() {
@@ -873,31 +967,102 @@
       return item;
     }
 
-    function renderDay() {
-      els.dayView.innerHTML = "";
-      const labels = document.createElement("div");
-      labels.className = "hour-labels";
-      const rows = document.createElement("div");
-      const tasks = tasksForDay(state.selected);
-      for (let hour = 7; hour <= 22; hour++) {
-        const label = document.createElement("div");
-        label.className = "hour-label";
-        label.textContent = `${pad(hour)}:00`;
-        labels.appendChild(label);
-        const row = document.createElement("div");
-        row.className = "hour-row";
-        tasks.filter(task => task.time ? Number(task.time.slice(0, 2)) === hour : hour === 7).forEach(task => {
-          const tag = document.createElement("button");
-          tag.type = "button";
-          tag.className = `hour-task q-${task.priority || "important_urgent"}`;
-          tag.textContent = `${task.time || "未定"} ${task.title}`;
-          tag.addEventListener("click", () => startEdit(task.id));
-          row.appendChild(tag);
-        });
-        rows.appendChild(row);
+    function renderWeekTasks() {
+      const weekStart = startOfWeek(state.cursor);
+      const weekKey = dateKey(weekStart);
+      const items = state.weeklyTasks.filter(item => item.weekStart === weekKey);
+      els.weekTaskView.innerHTML = `
+        <div class="week-task-head">
+          <h3>本周任务列表</h3>
+          <p>先把本周要做的工作写在这里，再点击周一到周日安排到具体日期。</p>
+        </div>
+        <form class="week-task-form" id="weekTaskForm">
+          <div class="field">
+            <label for="weekTaskTitle">工作内容</label>
+            <input id="weekTaskTitle" autocomplete="off" placeholder="例如：整理广告数据、跟进供应商、复盘周报">
+          </div>
+          <div class="field">
+            <label for="weekTaskPriority">重要程度</label>
+            <select id="weekTaskPriority">
+              <option value="important_urgent">重要紧急</option>
+              <option value="important_not_urgent">重要不紧急</option>
+              <option value="urgent_not_important">紧急不重要</option>
+              <option value="not_urgent_not_important">不紧急不重要</option>
+            </select>
+          </div>
+          <button class="btn primary" type="submit">加入本周列表</button>
+        </form>
+        <div class="week-task-list" id="weekTaskList"></div>
+      `;
+      const form = els.weekTaskView.querySelector("#weekTaskForm");
+      const list = els.weekTaskView.querySelector("#weekTaskList");
+      form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const titleInput = form.querySelector("#weekTaskTitle");
+        const priorityInput = form.querySelector("#weekTaskPriority");
+        const title = titleInput.value.trim();
+        if (!title) return titleInput.focus();
+        const item = {
+          id: makeId(),
+          weekStart: weekKey,
+          title,
+          priority: priorityInput.value,
+          note: "",
+          done: false
+        };
+        state.weeklyTasks.push(item);
+        await saveWeeklyTask(item);
+        render();
+      });
+      if (!items.length) {
+        list.innerHTML = `<div class="empty">本周任务列表还是空的</div>`;
+        return;
       }
-      els.dayView.appendChild(labels);
-      els.dayView.appendChild(rows);
+      items.forEach(item => {
+        const card = document.createElement("article");
+        card.className = `week-task-card task p-${item.priority || "important_urgent"}`;
+        card.innerHTML = `
+          <div class="task-top">
+            <div></div>
+            <div class="week-task-title">${escapeHtml(item.title)}</div>
+            <span class="badge priority p-${item.priority || "important_urgent"}">${priorityLabel(item.priority)}</span>
+          </div>
+          <div class="weekday-buttons"></div>
+          <div class="task-actions"><button class="text-btn danger delete-week-task" type="button">删除</button></div>
+        `;
+        const buttons = card.querySelector(".weekday-buttons");
+        for (let index = 0; index < 7; index++) {
+          const day = addDays(weekStart, index);
+          const btn = document.createElement("button");
+          btn.className = "btn";
+          btn.type = "button";
+          btn.textContent = `${weekNames[day.getDay()]} ${day.getMonth() + 1}/${day.getDate()}`;
+          btn.addEventListener("click", () => scheduleWeeklyTask(item, day));
+          buttons.appendChild(btn);
+        }
+        card.querySelector(".delete-week-task").addEventListener("click", () => deleteWeeklyTask(item.id));
+        list.appendChild(card);
+      });
+    }
+
+    async function scheduleWeeklyTask(item, day) {
+      const key = dateKey(day);
+      const task = {
+        id: makeId(),
+        title: item.title,
+        date: key,
+        endDate: key,
+        time: "",
+        type: "task",
+        scope: "day",
+        priority: item.priority || "important_urgent",
+        note: item.note || "",
+        done: false
+      };
+      state.tasks.push(task);
+      state.selected = day;
+      await saveTask(task);
+      render();
     }
 
     function renderSide() {
@@ -1055,20 +1220,12 @@
 
     els.prevBtn.addEventListener("click", () => {
       if (state.view === "month") state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1);
-      if (state.view === "week") state.cursor = addDays(state.cursor, -7);
-      if (state.view === "day") {
-        state.selected = addDays(state.selected, -1);
-        state.cursor = state.selected;
-      }
+      if (state.view === "week" || state.view === "weekTasks") state.cursor = addDays(state.cursor, -7);
       render();
     });
     els.nextBtn.addEventListener("click", () => {
       if (state.view === "month") state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1);
-      if (state.view === "week") state.cursor = addDays(state.cursor, 7);
-      if (state.view === "day") {
-        state.selected = addDays(state.selected, 1);
-        state.cursor = state.selected;
-      }
+      if (state.view === "week" || state.view === "weekTasks") state.cursor = addDays(state.cursor, 7);
       render();
     });
     els.todayBtn.addEventListener("click", () => {
