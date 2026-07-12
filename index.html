@@ -392,6 +392,10 @@
   <script>
     const localTaskKey = "cloud-calendar-local-tasks-v1";
     const configKey = "cloud-calendar-supabase-config-v1";
+    const embeddedSupabaseConfig = {
+      url: "https://scxsrgneitktymuxbxtg.supabase.co",
+      key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNjeHNyZ25laXRrdHltdXhieHRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4MjEyNDMsImV4cCI6MjA5OTM5NzI0M30.jeh5GfYmOAG3zDKoHB15QKYTOsNJecum89h8RZ89IAw"
+    };
     const weekNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
     const state = {
       view: "month",
@@ -578,12 +582,16 @@
     }
 
     async function initSupabase() {
-      const config = JSON.parse(localStorage.getItem(configKey) || "{}");
+      const savedConfig = JSON.parse(localStorage.getItem(configKey) || "{}");
+      const config = embeddedSupabaseConfig.url && embeddedSupabaseConfig.key ? embeddedSupabaseConfig : savedConfig;
+      if (embeddedSupabaseConfig.url && embeddedSupabaseConfig.key) {
+        localStorage.setItem(configKey, JSON.stringify(config));
+      }
       if (config.url) els.supabaseUrl.value = config.url;
       if (config.key) els.supabaseKey.value = config.key;
       if (!config.url || !config.key) return;
       state.supabase = window.supabase.createClient(config.url, config.key);
-      setCloudStatus("Supabase 配置已加载");
+      setCloudStatus("Supabase 配置已自动加载");
       const { data } = await state.supabase.auth.getSession();
       state.user = data.session?.user || null;
       updateAuthStatus();
