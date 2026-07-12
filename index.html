@@ -1186,6 +1186,15 @@
 
     els.reloadCloudBtn.addEventListener("click", loadCloud);
 
+    els.date.addEventListener("change", () => {
+      if (!els.date.value) return;
+      if (!els.endDate.value || els.endDate.value < els.date.value) {
+        els.endDate.value = els.date.value;
+      }
+      els.endDate.focus();
+      try { els.endDate.showPicker?.(); } catch {}
+    });
+
     els.form.addEventListener("submit", async event => {
       event.preventDefault();
       const title = els.title.value.trim();
