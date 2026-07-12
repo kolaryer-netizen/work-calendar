@@ -328,6 +328,8 @@
     .badge.p-important_not_urgent { color: #1d4ed8; background: #dbeafe; }
     .badge.p-urgent_not_important { color: #92400e; background: #fef3c7; }
     .badge.p-not_urgent_not_important { color: #475569; background: #e2e8f0; }
+    .badge.task-origin { color: #0f766e; background: #ccfbf1; }
+    .task-origin { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 2px 6px; font-size: 11px; font-weight: 700; line-height: 1; margin-left: 4px; }
     .task.p-important_urgent { border-left: 5px solid #dc2626; }
     .task.p-important_not_urgent { border-left: 5px solid #2563eb; }
     .task.p-urgent_not_important { border-left: 5px solid #f59e0b; }
@@ -446,9 +448,9 @@
           <p id="periodSubtitle"></p>
         </div>
         <div class="control">
-          <button class="btn" id="prevBtn" type="button">‹</button>
+          <button class="btn" id="prevBtn" type="button" aria-label="上一页">&lt;</button>
           <button class="btn" id="todayBtn" type="button">今天</button>
-          <button class="btn" id="nextBtn" type="button">›</button>
+          <button class="btn" id="nextBtn" type="button" aria-label="下一页">&gt;</button>
         </div>
         <div class="control">
           <button class="btn tab active" data-view="month" type="button">月</button>
@@ -661,6 +663,9 @@
       const end = task.endDate || task.date;
       return task.date === end ? task.date : `${task.date} 至 ${end}`;
     }
+    function taskOriginLabel(task) {
+      return task.scope === "week" ? "WK" : "";
+    }
     function currentWeekStartKey() {
       return dateKey(startOfWeek(state.cursor));
     }
@@ -798,7 +803,7 @@
       state.tasks = data.map(fromDb);
       state.weeklyTasks = weeklyData.map(weeklyFromDb);
       saveLocal();
-      setCloudStatus(`云端已连接，已读取 ${state.tasks.length} 项任务、${state.weeklyTasks.length} 项周任务`);
+      setCloudStatus(`云端已连接，读取 ${state.tasks.length} 项任务、${state.weeklyTasks.length} 项周任务`);
       render();
     }
 
@@ -806,7 +811,7 @@
       if (!state.supabase || !state.user) return;
       if (state.tasks.length) {
         const { error } = await state.supabase.from("calendar_tasks").upsert(state.tasks.map(toDb), { onConflict: "id" });
-        if (error) setCloudStatus(`本地同步到云端失败：${error.message}`);
+        if (error) setCloudStatus(`本地任务同步失败：${error.message}`);
       }
       if (state.weeklyTasks.length) {
         const { error } = await state.supabase.from("weekly_task_items").upsert(state.weeklyTasks.map(weeklyToDb), { onConflict: "id" });
@@ -923,7 +928,7 @@
         tasks.slice(0, 3).forEach(task => {
           const chip = document.createElement("div");
           chip.className = `chip ${rangeClass(task, day)} q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
-          chip.textContent = `${task.time ? task.time + " " : ""}${task.title}`;
+          chip.textContent = `${task.scope === "week" ? "WK·" : ""}${task.time ? task.time + " " : ""}${task.title}`;
           cell.appendChild(chip);
         });
         cell.addEventListener("click", () => {
@@ -959,7 +964,8 @@
       const item = document.createElement("button");
       item.type = "button";
       item.className = `time-card q-${task.priority || "important_urgent"} ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
-      item.innerHTML = `<strong>${task.time || "未定时间"}</strong><span>${escapeHtml(task.title)}</span>`;
+      const origin = taskOriginLabel(task);
+      item.innerHTML = `<strong>${task.time || "未定时间"}</strong><span>${escapeHtml(task.title)}${origin ? ` <span class="task-origin">${origin}</span>` : ""}</span>`;
       item.addEventListener("click", () => {
         state.selected = parseDate(task.date);
         startEdit(task.id);
@@ -974,7 +980,7 @@
       els.weekTaskView.innerHTML = `
         <div class="week-task-head">
           <h3>本周任务列表</h3>
-          <p>先把本周要做的工作写在这里，再点击周一到周日安排到具体日期。</p>
+          <p>先把本周要做的工作写在这里，再安排到周一至周日的具体日期。</p>
         </div>
         <form class="week-task-form" id="weekTaskForm">
           <div class="field">
@@ -1054,7 +1060,7 @@
         endDate: key,
         time: "",
         type: "task",
-        scope: "day",
+        scope: "week",
         priority: item.priority || "important_urgent",
         note: item.note || "",
         done: false
@@ -1068,7 +1074,7 @@
     function renderSide() {
       const tasks = tasksForDay(state.selected);
       els.selectedTitle.textContent = formatCn(state.selected);
-      els.selectedSummary.textContent = `${tasks.length} 项任务，${tasks.filter(task => task.done).length} 项完成`;
+      els.selectedSummary.textContent = `${tasks.length} 项任务，${tasks.filter(task => task.done).length} 项已完成`;
       els.taskList.innerHTML = "";
       if (!tasks.length) {
         els.taskList.innerHTML = `<div class="empty">这一天还没有任务</div>`;
@@ -1077,16 +1083,18 @@
       tasks.forEach(task => {
         const card = document.createElement("article");
         card.className = `task p-${task.priority || "important_urgent"} ${task.done ? "done" : ""}`;
+        const origin = taskOriginLabel(task);
         card.innerHTML = `
           <div class="task-top">
             <input class="check" type="checkbox" ${task.done ? "checked" : ""}>
             <div class="task-title">${escapeHtml(task.title)}</div>
-            <span class="badge ${task.type === "milestone" ? "milestone" : ""}">${task.type === "milestone" ? "节点" : "任务"}</span>
+            <span class="badge ${task.type === "milestone" ? "milestone" : ""}">${task.type === "milestone" ? "时间节点" : "任务"}</span>
           </div>
           <div class="meta">
             <span>${task.time || "未定时间"}</span>
             <span>${dateRangeLabel(task)}</span>
             <span>${task.scope === "week" ? "本周任务" : "当天任务"}</span>
+            ${origin ? `<span class="badge task-origin">${origin}</span>` : ""}
             <span class="badge priority p-${task.priority || "important_urgent"}">${priorityLabel(task.priority)}</span>
           </div>
           ${task.note ? `<p class="note">${escapeHtml(task.note)}</p>` : ""}
@@ -1192,7 +1200,7 @@
       const password = els.password.value;
       const { error } = await state.supabase.auth.signUp({ email, password });
       if (error) setAuthStatus(`注册失败：${error.message}`);
-      else setAuthStatus("注册成功。如 Supabase 开启邮箱确认，请先去邮箱确认。");
+      else setAuthStatus("注册成功。如果 Supabase 开启邮箱确认，请先去邮箱确认。");
     });
 
     els.signInBtn.addEventListener("click", async () => {
@@ -1213,40 +1221,15 @@
       if (state.supabase) await state.supabase.auth.signOut();
       state.user = null;
       updateAuthStatus();
-      setCloudStatus("已退出，当前显示本地缓存数据");
     });
 
-    els.reloadCloudBtn.addEventListener("click", loadCloud);
-
-    els.prevBtn.addEventListener("click", () => {
-      if (state.view === "month") state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1);
-      if (state.view === "week" || state.view === "weekTasks") state.cursor = addDays(state.cursor, -7);
-      render();
-    });
-    els.nextBtn.addEventListener("click", () => {
-      if (state.view === "month") state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1);
-      if (state.view === "week" || state.view === "weekTasks") state.cursor = addDays(state.cursor, 7);
-      render();
-    });
-    els.todayBtn.addEventListener("click", () => {
-      state.cursor = new Date();
-      state.selected = new Date();
-      clearForm();
-      render();
-    });
-    document.querySelectorAll(".tab").forEach(button => {
-      button.addEventListener("click", () => {
-        state.view = button.dataset.view;
-        document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab === button));
-        state.cursor = state.selected;
-        render();
-      });
-    });
-
-    loadLocal();
-    clearForm();
-    render();
     initSupabase();
   </script>
 </body>
 </html>
+
+
+
+
+
+
