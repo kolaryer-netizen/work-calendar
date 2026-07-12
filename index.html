@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>云同步工作任务日历</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f4ef;
+      --panel: #fff;
+      --ink: #1f2933;
+      --muted: #6b7280;
+      --line: #ded8ce;
+      --accent: #2563eb;
+      --accent-soft: #e8f0ff;
+      --green: #16805b;
+      --green-soft: #e8f6ef;
+      --orange: #b45309;
+      --orange-soft: #fff3df;
+      --red: #b42318;
+      --red-soft: #ffe8e4;
+      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); }
+    button, input, textarea, select { font: inherit; }
+    button { border: 0; cursor: pointer; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: #1f2933;
+      color: #fff;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .brand h1 { margin: 0; font-size: 22px; }
+    .brand p { margin: 8px 0 0; color: #cbd5e1; font-size: 13px; line-height: 1.5; }
+
+    .card {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .card h2 { margin: 0 0 10px; font-size: 14px; color: #e5e7eb; }
+    .field { display: grid; gap: 5px; margin-bottom: 9px; }
+    .field label { font-size: 12px; color: #cbd5e1; font-weight: 700; }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      min-height: 36px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      outline: none;
+      background: #fff;
+      color: var(--ink);
+    }
+    .field textarea { min-height: 62px; resize: vertical; }
+
+    .btn {
+      min-height: 36px;
+      border-radius: 7px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      color: var(--ink);
+      background: #eef2f6;
+    }
+    .btn.primary { color: #fff; background: var(--accent); }
+    .btn.danger { color: var(--red); background: var(--red-soft); }
+    .btn.ghost { color: #e5e7eb; background: rgba(255,255,255,.10); }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .status { font-size: 12px; line-height: 1.5; color: #cbd5e1; margin-top: 8px; }
+    .status strong { color: #fff; }
+
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat { text-align: center; border-radius: 8px; padding: 10px 8px; background: rgba(255,255,255,.08); }
+    .stat strong { display: block; font-size: 20px; }
+    .stat span { display: block; margin-top: 4px; color: #cbd5e1; font-size: 12px; }
+
+    .content {
+      padding: 22px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(230px, 1fr) auto auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .toolbar h2 { margin: 0; font-size: 24px; }
+    .toolbar p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+    .control {
+      display: flex;
+      gap: 8px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px;
+    }
+    .tab.active { background: var(--accent); color: #fff; }
+
+    .main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 16px 38px rgba(31,41,51,.08);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .weekdays, .month {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(80px, 1fr));
+    }
+    .weekdays { background: #faf9f6; border-bottom: 1px solid var(--line); }
+    .weekdays div { text-align: center; padding: 12px 4px; font-size: 13px; color: var(--muted); font-weight: 700; }
+    .month { grid-auto-rows: minmax(110px, 1fr); min-height: 660px; }
+
+    .day {
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: #fff;
+      text-align: left;
+      min-width: 0;
+    }
+    .day:nth-child(7n) { border-right: 0; }
+    .day.muted { background: #f8f7f3; color: #9ca3af; }
+    .day.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .day.today .num { background: var(--accent); color: #fff; }
+    .day-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .count { color: var(--muted); font-size: 12px; }
+
+    .chip {
+      border-radius: 7px;
+      padding: 6px 7px;
+      font-size: 12px;
+      line-height: 1.3;
+      background: var(--accent-soft);
+      color: #16488f;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chip.done { color: var(--green); background: var(--green-soft); text-decoration: line-through; }
+    .chip.milestone { color: var(--orange); background: var(--orange-soft); }
+
+    .week { display: none; grid-template-columns: repeat(7, minmax(130px, 1fr)); min-height: 660px; }
+    .week.active { display: grid; }
+    .week-col { border-right: 1px solid var(--line); padding: 12px; display: grid; grid-template-rows: auto 1fr; gap: 10px; }
+    .week-col:last-child { border-right: 0; }
+    .week-title { background: transparent; text-align: left; padding: 0; }
+    .week-title strong { display: block; font-size: 16px; }
+    .week-title span { color: var(--muted); font-size: 12px; }
+    .timeline { display: flex; flex-direction: column; gap: 8px; }
+    .time-card {
+      border-left: 3px solid var(--accent);
+      background: #f8fbff;
+      border-radius: 7px;
+      padding: 8px;
+      text-align: left;
+    }
+    .time-card.done { border-left-color: var(--green); background: var(--green-soft); }
+    .time-card.milestone { border-left-color: var(--orange); background: var(--orange-soft); }
+    .time-card strong { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+
+    .dayview { display: none; grid-template-columns: 82px minmax(0,1fr); min-height: 660px; }
+    .dayview.active { display: grid; }
+    .hour-labels { background: #faf9f6; border-right: 1px solid var(--line); }
+    .hour-label, .hour-row { min-height: 54px; border-bottom: 1px solid var(--line); padding: 8px 10px; color: var(--muted); font-size: 12px; }
+    .hour-task { display: inline-flex; margin: 2px 6px 4px 0; border-radius: 7px; padding: 6px 8px; background: var(--accent-soft); color: #16488f; }
+
+    .side { display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+    .side-head { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); }
+    .side-head h3 { margin: 0; font-size: 19px; }
+    .side-head span { display: block; margin-top: 5px; color: var(--muted); font-size: 13px; }
+    .task-form { padding: 14px 18px; border-bottom: 1px solid var(--line); background: #fbfaf8; }
+    .task-form .field label { color: var(--muted); }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .tasks { padding: 14px 18px 18px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+    .task {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      background: #fff;
+    }
+    .task.done { background: #f7fbf8; }
+    .task-top { display: grid; grid-template-columns: 20px minmax(0,1fr) auto; gap: 9px; align-items: start; }
+    .task-title { font-weight: 800; line-height: 1.35; word-break: break-word; }
+    .task.done .task-title { color: var(--green); text-decoration: line-through; }
+    .badge { border-radius: 999px; padding: 4px 8px; font-size: 12px; color: #16488f; background: var(--accent-soft); }
+    .badge.milestone { color: var(--orange); background: var(--orange-soft); }
+    .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .note { margin: 0; color: #4b5563; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+    .task-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .text-btn { background: transparent; color: var(--muted); padding: 4px 6px; border-radius: 5px; }
+    .text-btn:hover { background: #f1f3f5; color: var(--ink); }
+    .text-btn.danger:hover { background: var(--red-soft); color: var(--red); }
+    .empty { color: var(--muted); text-align: center; padding: 24px 10px; border: 1px dashed var(--line); border-radius: 8px; background: #fbfaf8; }
+
+    @media (max-width: 1080px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: block; }
+      .main { grid-template-columns: 1fr; }
+      .side { min-height: 520px; }
+    }
+    @media (max-width: 760px) {
+      .content { padding: 14px; }
+      .toolbar { grid-template-columns: 1fr; }
+      .control { justify-content: space-between; }
+      .weekdays, .month { grid-template-columns: repeat(7, minmax(44px, 1fr)); }
+      .month { min-height: 520px; grid-auto-rows: minmax(84px,1fr); }
+      .day { padding: 5px; }
+      .chip { font-size: 11px; padding: 4px 5px; }
+      .week { grid-template-columns: 1fr; }
+      .week-col { border-right: 0; border-bottom: 1px solid var(--line); }
+      .dayview { grid-template-columns: 62px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <section class="brand">
+        <h1>云同步工作任务日历</h1>
+        <p id="todayText"></p>
+      </section>
+
+      <section class="card">
+        <h2>Supabase 配置</h2>
+        <div class="field">
+          <label for="supabaseUrl">Project URL</label>
+          <input id="supabaseUrl" placeholder="https://xxxx.supabase.co">
+        </div>
+        <div class="field">
+          <label for="supabaseKey">anon public key</label>
+          <input id="supabaseKey" placeholder="eyJhbGciOi...">
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="saveConfigBtn" type="button">保存配置</button>
+          <button class="btn ghost" id="reloadCloudBtn" type="button">刷新云端</button>
+        </div>
+        <div class="status" id="cloudStatus">未连接云端</div>
+      </section>
+
+      <section class="card">
+        <h2>登录账号</h2>
+        <div class="field">
+          <label for="email">邮箱</label>
+          <input id="email" type="email" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="password">密码</label>
+          <input id="password" type="password" autocomplete="current-password">
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="signInBtn" type="button">登录</button>
+          <button class="btn ghost" id="signUpBtn" type="button">注册</button>
+          <button class="btn danger" id="signOutBtn" type="button">退出</button>
+        </div>
+        <div class="status" id="authStatus">未登录</div>
+      </section>
+
+      <section class="card">
+        <h2>本周概览</h2>
+        <div class="stats">
+          <div class="stat"><strong id="weekTotal">0</strong><span>任务</span></div>
+          <div class="stat"><strong id="weekDone">0</strong><span>完成</span></div>
+          <div class="stat"><strong id="weekMilestones">0</strong><span>节点</span></div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="content">
+      <header class="toolbar">
+        <div>
+          <h2 id="periodTitle"></h2>
+          <p id="periodSubtitle"></p>
+        </div>
+        <div class="control">
+          <button class="btn" id="prevBtn" type="button">‹</button>
+          <button class="btn" id="todayBtn" type="button">今天</button>
+          <button class="btn" id="nextBtn" type="button">›</button>
+        </div>
+        <div class="control">
+          <button class="btn tab active" data-view="month" type="button">月</button>
+          <button class="btn tab" data-view="week" type="button">周</button>
+          <button class="btn tab" data-view="day" type="button">日</button>
+        </div>
+      </header>
+
+      <section class="main">
+        <div class="panel">
+          <div class="weekdays" id="weekdays">
+            <div>周一</div><div>周二</div><div>周三</div><div>周四</div><div>周五</div><div>周六</div><div>周日</div>
+          </div>
+          <div class="month" id="monthView"></div>
+          <div class="week" id="weekView"></div>
+          <div class="dayview" id="dayView"></div>
+        </div>
+
+        <aside class="panel side">
+          <div class="side-head">
+            <h3 id="selectedTitle"></h3>
+            <span id="selectedSummary"></span>
+          </div>
+
+          <form class="task-form" id="taskForm">
+            <div class="field">
+              <label for="taskTitle">任务</label>
+              <input id="taskTitle" autocomplete="off" placeholder="例如：整理周报、跟进客户、发货检查">
+            </div>
+            <div class="split">
+              <div class="field">
+                <label for="taskDate">日期</label>
+                <input id="taskDate" type="date">
+              </div>
+              <div class="field">
+                <label for="taskTime">时间节点</label>
+                <input id="taskTime" type="time">
+              </div>
+            </div>
+            <div class="split">
+              <div class="field">
+                <label for="taskType">类型</label>
+                <select id="taskType">
+                  <option value="task">任务</option>
+                  <option value="milestone">时间节点</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="taskScope">周期</label>
+                <select id="taskScope">
+                  <option value="day">当天</option>
+                  <option value="week">本周</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="taskNote">备注</label>
+              <textarea id="taskNote" placeholder="补充负责人、资料、注意事项"></textarea>
+            </div>
+            <button class="btn primary" id="submitBtn" type="submit">添加任务</button>
+          </form>
+
+          <div class="tasks" id="taskList"></div>
+        </aside>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const localTaskKey = "cloud-calendar-local-tasks-v1";
+    const configKey = "cloud-calendar-supabase-config-v1";
+    const weekNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const state = {
+      view: "month",
+      cursor: new Date(),
+      selected: new Date(),
+      tasks: [],
+      editingId: null,
+      supabase: null,
+      user: null,
+      syncing: false
+    };
+
+    const els = {
+      todayText: document.getElementById("todayText"),
+      supabaseUrl: document.getElementById("supabaseUrl"),
+      supabaseKey: document.getElementById("supabaseKey"),
+      saveConfigBtn: document.getElementById("saveConfigBtn"),
+      reloadCloudBtn: document.getElementById("reloadCloudBtn"),
+      cloudStatus: document.getElementById("cloudStatus"),
+      email: document.getElementById("email"),
+      password: document.getElementById("password"),
+      signInBtn: document.getElementById("signInBtn"),
+      signUpBtn: document.getElementById("signUpBtn"),
+      signOutBtn: document.getElementById("signOutBtn"),
+      authStatus: document.getElementById("authStatus"),
+      periodTitle: document.getElementById("periodTitle"),
+      periodSubtitle: document.getElementById("periodSubtitle"),
+      prevBtn: document.getElementById("prevBtn"),
+      todayBtn: document.getElementById("todayBtn"),
+      nextBtn: document.getElementById("nextBtn"),
+      weekdays: document.getElementById("weekdays"),
+      monthView: document.getElementById("monthView"),
+      weekView: document.getElementById("weekView"),
+      dayView: document.getElementById("dayView"),
+      selectedTitle: document.getElementById("selectedTitle"),
+      selectedSummary: document.getElementById("selectedSummary"),
+      form: document.getElementById("taskForm"),
+      title: document.getElementById("taskTitle"),
+      date: document.getElementById("taskDate"),
+      time: document.getElementById("taskTime"),
+      type: document.getElementById("taskType"),
+      scope: document.getElementById("taskScope"),
+      note: document.getElementById("taskNote"),
+      submit: document.getElementById("submitBtn"),
+      taskList: document.getElementById("taskList"),
+      weekTotal: document.getElementById("weekTotal"),
+      weekDone: document.getElementById("weekDone"),
+      weekMilestones: document.getElementById("weekMilestones")
+    };
+
+    function pad(value) { return String(value).padStart(2, "0"); }
+    function dateKey(date) { return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`; }
+    function parseDate(key) {
+      const [year, month, day] = key.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+    function sameDay(a, b) { return dateKey(a) === dateKey(b); }
+    function formatCn(date) { return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${weekNames[date.getDay()]}`; }
+    function startOfWeek(date) {
+      const copy = new Date(date);
+      const day = copy.getDay() || 7;
+      copy.setDate(copy.getDate() - day + 1);
+      copy.setHours(0, 0, 0, 0);
+      return copy;
+    }
+    function addDays(date, amount) {
+      const copy = new Date(date);
+      copy.setDate(copy.getDate() + amount);
+      return copy;
+    }
+    function monthDays(date) {
+      const first = new Date(date.getFullYear(), date.getMonth(), 1);
+      const start = startOfWeek(first);
+      return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+    }
+    function sortedTasks(tasks) {
+      return [...tasks].sort((a, b) => `${a.date} ${a.time || "99:99"}`.localeCompare(`${b.date} ${b.time || "99:99"}`));
+    }
+    function tasksForDay(date) {
+      return sortedTasks(state.tasks.filter(task => task.date === dateKey(date)));
+    }
+    function escapeHtml(value) {
+      return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    }
+    function makeId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+      return `task-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    function toDb(task) {
+      return {
+        id: task.id,
+        user_id: state.user.id,
+        title: task.title,
+        task_date: task.date,
+        task_time: task.time || null,
+        task_type: task.type,
+        task_scope: task.scope,
+        note: task.note || "",
+        done: !!task.done
+      };
+    }
+    function fromDb(row) {
+      return {
+        id: row.id,
+        title: row.title,
+        date: row.task_date,
+        time: row.task_time ? row.task_time.slice(0, 5) : "",
+        type: row.task_type,
+        scope: row.task_scope,
+        note: row.note || "",
+        done: !!row.done
+      };
+    }
+
+    function saveLocal() {
+      localStorage.setItem(localTaskKey, JSON.stringify(state.tasks));
+    }
+    function loadLocal() {
+      try { state.tasks = JSON.parse(localStorage.getItem(localTaskKey) || "[]"); }
+      catch { state.tasks = []; }
+    }
+
+    async function saveTask(task) {
+      saveLocal();
+      if (!state.supabase || !state.user) {
+        setCloudStatus("本地已保存，登录后可同步云端");
+        return;
+      }
+      const { error } = await state.supabase.from("calendar_tasks").upsert(toDb(task), { onConflict: "id" });
+      if (error) setCloudStatus(`云端保存失败：${error.message}`);
+      else setCloudStatus("云端已同步");
+    }
+
+    async function deleteTask(id) {
+      state.tasks = state.tasks.filter(task => task.id !== id);
+      saveLocal();
+      if (state.supabase && state.user) {
+        const { error } = await state.supabase.from("calendar_tasks").delete().eq("id", id);
+        if (error) setCloudStatus(`云端删除失败：${error.message}`);
+        else setCloudStatus("云端已删除");
+      }
+      render();
+    }
+
+    async function loadCloud() {
+      if (!state.supabase || !state.user) return;
+      state.syncing = true;
+      setCloudStatus("正在读取云端数据...");
+      const { data, error } = await state.supabase
+        .from("calendar_tasks")
+        .select("*")
+        .order("task_date", { ascending: true })
+        .order("task_time", { ascending: true });
+      state.syncing = false;
+      if (error) {
+        setCloudStatus(`云端读取失败：${error.message}`);
+        return;
+      }
+      state.tasks = data.map(fromDb);
+      saveLocal();
+      setCloudStatus(`云端已连接，已读取 ${state.tasks.length} 项任务`);
+      render();
+    }
+
+    async function syncLocalToCloud() {
+      if (!state.supabase || !state.user || !state.tasks.length) return;
+      const { error } = await state.supabase.from("calendar_tasks").upsert(state.tasks.map(toDb), { onConflict: "id" });
+      if (error) setCloudStatus(`本地同步到云端失败：${error.message}`);
+    }
+
+    function setCloudStatus(text) { els.cloudStatus.innerHTML = text; }
+    function setAuthStatus(text) { els.authStatus.innerHTML = text; }
+
+    function normalizeSupabaseUrl(value) {
+      const raw = value.trim();
+      if (!raw) return "";
+      try {
+        const url = new URL(raw);
+        return `${url.protocol}//${url.host}`;
+      } catch {
+        return raw.replace(/\/rest\/v1.*$/i, "").replace(/\/auth\/v1.*$/i, "").replace(/\/+$/, "");
+      }
+    }
+
+    async function initSupabase() {
+      const config = JSON.parse(localStorage.getItem(configKey) || "{}");
+      if (config.url) els.supabaseUrl.value = config.url;
+      if (config.key) els.supabaseKey.value = config.key;
+      if (!config.url || !config.key) return;
+      state.supabase = window.supabase.createClient(config.url, config.key);
+      setCloudStatus("Supabase 配置已加载");
+      const { data } = await state.supabase.auth.getSession();
+      state.user = data.session?.user || null;
+      updateAuthStatus();
+      if (state.user) {
+        await syncLocalToCloud();
+        await loadCloud();
+      }
+      state.supabase.auth.onAuthStateChange(async (_event, session) => {
+        state.user = session?.user || null;
+        updateAuthStatus();
+        if (state.user) await loadCloud();
+      });
+    }
+
+    function updateAuthStatus() {
+      if (state.user) setAuthStatus(`已登录：<strong>${escapeHtml(state.user.email || "")}</strong>`);
+      else setAuthStatus("未登录");
+    }
+
+    function render() {
+      els.todayText.textContent = formatCn(new Date());
+      els.date.value = dateKey(state.selected);
+      renderHeader();
+      renderCalendar();
+      renderSide();
+      renderStats();
+    }
+
+    function renderHeader() {
+      if (state.view === "month") {
+        els.periodTitle.textContent = `${state.cursor.getFullYear()}年${state.cursor.getMonth() + 1}月`;
+        els.periodSubtitle.textContent = "按月查看任务分布和时间节点";
+      }
+      if (state.view === "week") {
+        const start = startOfWeek(state.cursor);
+        const end = addDays(start, 6);
+        els.periodTitle.textContent = `${start.getMonth() + 1}月${start.getDate()}日 - ${end.getMonth() + 1}月${end.getDate()}日`;
+        els.periodSubtitle.textContent = "按周安排重点工作和每日任务流";
+      }
+      if (state.view === "day") {
+        els.periodTitle.textContent = formatCn(state.selected);
+        els.periodSubtitle.textContent = "按时间节点查看当天安排";
+      }
+    }
+
+    function renderCalendar() {
+      els.weekdays.style.display = state.view === "month" ? "grid" : "none";
+      els.monthView.style.display = state.view === "month" ? "grid" : "none";
+      els.weekView.classList.toggle("active", state.view === "week");
+      els.dayView.classList.toggle("active", state.view === "day");
+      renderMonth();
+      renderWeek();
+      renderDay();
+    }
+
+    function renderMonth() {
+      els.monthView.innerHTML = "";
+      monthDays(state.cursor).forEach(day => {
+        const tasks = tasksForDay(day);
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "day";
+        if (day.getMonth() !== state.cursor.getMonth()) cell.classList.add("muted");
+        if (sameDay(day, new Date())) cell.classList.add("today");
+        if (sameDay(day, state.selected)) cell.classList.add("selected");
+        cell.innerHTML = `<div class="day-head"><span class="num">${day.getDate()}</span><span class="count">${tasks.length ? tasks.length + "项" : ""}</span></div>`;
+        tasks.slice(0, 3).forEach(task => {
+          const chip = document.createElement("div");
+          chip.className = `chip ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
+          chip.textContent = `${task.time ? task.time + " " : ""}${task.title}`;
+          cell.appendChild(chip);
+        });
+        cell.addEventListener("click", () => {
+          state.selected = day;
+          state.cursor = day;
+          render();
+        });
+        els.monthView.appendChild(cell);
+      });
+    }
+
+    function renderWeek() {
+      const start = startOfWeek(state.cursor);
+      els.weekView.innerHTML = "";
+      Array.from({ length: 7 }, (_, index) => addDays(start, index)).forEach(day => {
+        const tasks = tasksForDay(day);
+        const col = document.createElement("section");
+        col.className = "week-col";
+        col.innerHTML = `<button class="week-title" type="button"><strong>${day.getMonth() + 1}/${day.getDate()}</strong><span>${weekNames[day.getDay()]} · ${tasks.length}项</span></button><div class="timeline"></div>`;
+        col.querySelector(".week-title").addEventListener("click", () => {
+          state.selected = day;
+          state.cursor = day;
+          render();
+        });
+        const timeline = col.querySelector(".timeline");
+        if (!tasks.length) timeline.innerHTML = `<div class="empty">暂无任务</div>`;
+        tasks.forEach(task => timeline.appendChild(timeCard(task)));
+        els.weekView.appendChild(col);
+      });
+    }
+
+    function timeCard(task) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = `time-card ${task.done ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
+      item.innerHTML = `<strong>${task.time || "未定时间"}</strong><span>${escapeHtml(task.title)}</span>`;
+      item.addEventListener("click", () => {
+        state.selected = parseDate(task.date);
+        startEdit(task.id);
+      });
+      return item;
+    }
+
+    function renderDay() {
+      els.dayView.innerHTML = "";
+      const labels = document.createElement("div");
+      labels.className = "hour-labels";
+      const rows = document.createElement("div");
+      const tasks = tasksForDay(state.selected);
+      for (let hour = 7; hour <= 22; hour++) {
+        const label = document.createElement("div");
+        label.className = "hour-label";
+        label.textContent = `${pad(hour)}:00`;
+        labels.appendChild(label);
+        const row = document.createElement("div");
+        row.className = "hour-row";
+        tasks.filter(task => task.time ? Number(task.time.slice(0, 2)) === hour : hour === 7).forEach(task => {
+          const tag = document.createElement("button");
+          tag.type = "button";
+          tag.className = "hour-task";
+          tag.textContent = `${task.time || "未定"} ${task.title}`;
+          tag.addEventListener("click", () => startEdit(task.id));
+          row.appendChild(tag);
+        });
+        rows.appendChild(row);
+      }
+      els.dayView.appendChild(labels);
+      els.dayView.appendChild(rows);
+    }
+
+    function renderSide() {
+      const tasks = tasksForDay(state.selected);
+      els.selectedTitle.textContent = formatCn(state.selected);
+      els.selectedSummary.textContent = `${tasks.length} 项任务，${tasks.filter(task => task.done).length} 项完成`;
+      els.taskList.innerHTML = "";
+      if (!tasks.length) {
+        els.taskList.innerHTML = `<div class="empty">这一天还没有任务</div>`;
+        return;
+      }
+      tasks.forEach(task => {
+        const card = document.createElement("article");
+        card.className = `task ${task.done ? "done" : ""}`;
+        card.innerHTML = `
+          <div class="task-top">
+            <input class="check" type="checkbox" ${task.done ? "checked" : ""}>
+            <div class="task-title">${escapeHtml(task.title)}</div>
+            <span class="badge ${task.type === "milestone" ? "milestone" : ""}">${task.type === "milestone" ? "节点" : "任务"}</span>
+          </div>
+          <div class="meta"><span>${task.time || "未定时间"}</span><span>${task.scope === "week" ? "本周任务" : "当天任务"}</span></div>
+          ${task.note ? `<p class="note">${escapeHtml(task.note)}</p>` : ""}
+          <div class="task-actions"><button class="text-btn edit" type="button">编辑</button><button class="text-btn danger delete" type="button">删除</button></div>
+        `;
+        card.querySelector(".check").addEventListener("change", async event => {
+          task.done = event.target.checked;
+          await saveTask(task);
+          render();
+        });
+        card.querySelector(".edit").addEventListener("click", () => startEdit(task.id));
+        card.querySelector(".delete").addEventListener("click", () => deleteTask(task.id));
+        els.taskList.appendChild(card);
+      });
+    }
+
+    function renderStats() {
+      const start = startOfWeek(new Date());
+      const end = addDays(start, 6);
+      const tasks = state.tasks.filter(task => {
+        const date = parseDate(task.date);
+        return date >= start && date <= end;
+      });
+      els.weekTotal.textContent = tasks.length;
+      els.weekDone.textContent = tasks.filter(task => task.done).length;
+      els.weekMilestones.textContent = tasks.filter(task => task.type === "milestone").length;
+    }
+
+    function startEdit(id) {
+      const task = state.tasks.find(item => item.id === id);
+      if (!task) return;
+      state.editingId = id;
+      els.title.value = task.title;
+      els.date.value = task.date;
+      els.time.value = task.time || "";
+      els.type.value = task.type;
+      els.scope.value = task.scope;
+      els.note.value = task.note || "";
+      els.submit.textContent = "保存修改";
+      render();
+    }
+
+    function clearForm() {
+      state.editingId = null;
+      els.form.reset();
+      els.date.value = dateKey(state.selected);
+      els.submit.textContent = "添加任务";
+    }
+
+    els.form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const title = els.title.value.trim();
+      if (!title) return els.title.focus();
+      const payload = {
+        title,
+        date: els.date.value || dateKey(state.selected),
+        time: els.time.value,
+        type: els.type.value,
+        scope: els.scope.value,
+        note: els.note.value.trim()
+      };
+      let task;
+      if (state.editingId) {
+        task = state.tasks.find(item => item.id === state.editingId);
+        Object.assign(task, payload);
+      } else {
+        task = { id: makeId(), done: false, ...payload };
+        state.tasks.push(task);
+      }
+      state.selected = parseDate(payload.date);
+      state.cursor = parseDate(payload.date);
+      clearForm();
+      await saveTask(task);
+      render();
+    });
+
+    els.saveConfigBtn.addEventListener("click", async () => {
+      const url = normalizeSupabaseUrl(els.supabaseUrl.value);
+      const key = els.supabaseKey.value.trim();
+      if (!url || !key) return setCloudStatus("请先填写 Project URL 和 anon public key");
+      if (!/^https:\/\/[^/]+\.supabase\.co$/i.test(url)) {
+        setCloudStatus("Project URL 看起来不对，应该类似：https://xxxx.supabase.co");
+        els.supabaseUrl.value = url;
+        return;
+      }
+      els.supabaseUrl.value = url;
+      localStorage.setItem(configKey, JSON.stringify({ url, key }));
+      await initSupabase();
+    });
+
+    els.signUpBtn.addEventListener("click", async () => {
+      if (!state.supabase) return setAuthStatus("请先保存 Supabase 配置");
+      const email = els.email.value.trim();
+      const password = els.password.value;
+      const { error } = await state.supabase.auth.signUp({ email, password });
+      if (error) setAuthStatus(`注册失败：${error.message}`);
+      else setAuthStatus("注册成功。如 Supabase 开启邮箱确认，请先去邮箱确认。");
+    });
+
+    els.signInBtn.addEventListener("click", async () => {
+      if (!state.supabase) return setAuthStatus("请先保存 Supabase 配置");
+      const email = els.email.value.trim();
+      const password = els.password.value;
+      const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
+      if (error) setAuthStatus(`登录失败：${error.message}`);
+      else {
+        state.user = data.user;
+        updateAuthStatus();
+        await syncLocalToCloud();
+        await loadCloud();
+      }
+    });
+
+    els.signOutBtn.addEventListener("click", async () => {
+      if (state.supabase) await state.supabase.auth.signOut();
+      state.user = null;
+      updateAuthStatus();
+      setCloudStatus("已退出，当前显示本地缓存数据");
+    });
+
+    els.reloadCloudBtn.addEventListener("click", loadCloud);
+
+    els.prevBtn.addEventListener("click", () => {
+      if (state.view === "month") state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1);
+      if (state.view === "week") state.cursor = addDays(state.cursor, -7);
+      if (state.view === "day") {
+        state.selected = addDays(state.selected, -1);
+        state.cursor = state.selected;
+      }
+      render();
+    });
+    els.nextBtn.addEventListener("click", () => {
+      if (state.view === "month") state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1);
+      if (state.view === "week") state.cursor = addDays(state.cursor, 7);
+      if (state.view === "day") {
+        state.selected = addDays(state.selected, 1);
+        state.cursor = state.selected;
+      }
+      render();
+    });
+    els.todayBtn.addEventListener("click", () => {
+      state.cursor = new Date();
+      state.selected = new Date();
+      clearForm();
+      render();
+    });
+    document.querySelectorAll(".tab").forEach(button => {
+      button.addEventListener("click", () => {
+        state.view = button.dataset.view;
+        document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab === button));
+        state.cursor = state.selected;
+        render();
+      });
+    });
+
+    loadLocal();
+    clearForm();
+    render();
+    initSupabase();
+  </script>
+</body>
+</html>
