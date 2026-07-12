@@ -291,7 +291,11 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
+      cursor: grab;
+      transition: opacity 120ms ease, box-shadow 120ms ease;
     }
+    .week-task-card:active { cursor: grabbing; }
+    .week-task-card.dragging { opacity: .45; box-shadow: 0 0 0 2px var(--accent); }
     .week-task-title { font-weight: 800; line-height: 1.35; }
     .week-task-summary {
       width: 100%;
@@ -715,7 +719,8 @@
         title: item.title,
         task_priority: item.priority || "important_urgent",
         note: item.note || "",
-        done: !!item.done
+        done: !!item.done,
+        ...(item.orderAt ? { created_at: item.orderAt } : {})
       };
     }
     function weeklyFromDb(row) {
@@ -725,7 +730,8 @@
         title: row.title,
         priority: row.task_priority || "important_urgent",
         note: row.note || "",
-        done: !!row.done
+        done: !!row.done,
+        orderAt: row.created_at || ""
       };
     }
 
@@ -888,6 +894,7 @@
 
     function render() {
       els.todayText.textContent = formatCn(new Date());
+      els.form.classList.toggle("hidden", state.view !== "weekTasks");
       if (!state.editingId) {
         els.date.value = dateKey(state.selected);
         els.endDate.value = dateKey(state.selected);
@@ -1020,7 +1027,8 @@
           title,
           priority: "important_urgent",
           note: "",
-          done: false
+          done: false,
+          orderAt: new Date().toISOString()
         };
         state.weeklyTasks.push(item);
         await saveWeeklyTask(item);
@@ -1030,9 +1038,13 @@
         list.innerHTML = `<div class="empty">本周任务列表还是空的</div>`;
         return;
       }
+      let draggedId = null;
+      let didDrag = false;
       items.forEach(item => {
         const card = document.createElement("article");
         card.className = "week-task-card";
+        card.draggable = true;
+        card.dataset.weeklyId = item.id;
         card.innerHTML = `
           <button class="week-task-summary" type="button">
             <span class="week-task-title">${escapeHtml(item.title)}</span>
@@ -1040,7 +1052,42 @@
           <div class="task-actions"><button class="text-btn danger delete-week-task" type="button">删除</button></div>
         `;
         const summary = card.querySelector(".week-task-summary");
-        summary.addEventListener("click", () => prepareWeeklyTask(item));
+        summary.addEventListener("click", () => {
+          if (didDrag) return;
+          prepareWeeklyTask(item);
+        });
+        card.addEventListener("dragstart", event => {
+          draggedId = item.id;
+          didDrag = true;
+          card.classList.add("dragging");
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", item.id);
+        });
+        card.addEventListener("dragover", event => {
+          event.preventDefault();
+          const dragged = list.querySelector(`[data-weekly-id="${draggedId}"]`);
+          if (!dragged || dragged === card) return;
+          const rect = card.getBoundingClientRect();
+          const insertAfter = event.clientY > rect.top + rect.height / 2;
+          list.insertBefore(dragged, insertAfter ? card.nextSibling : card);
+        });
+        card.addEventListener("drop", async event => {
+          event.preventDefault();
+          const orderedIds = [...list.querySelectorAll("[data-weekly-id]")].map(node => node.dataset.weeklyId);
+          const orderedItems = orderedIds.map(id => state.weeklyTasks.find(entry => entry.id === id)).filter(Boolean);
+          const queue = [...orderedItems];
+          state.weeklyTasks = state.weeklyTasks.map(entry => entry.weekStart === weekKey ? queue.shift() : entry);
+          const base = Date.now();
+          orderedItems.forEach((entry, index) => { entry.orderAt = new Date(base + index * 1000).toISOString(); });
+          saveLocal();
+          await Promise.all(orderedItems.map(saveWeeklyTask));
+          render();
+        });
+        card.addEventListener("dragend", () => {
+          card.classList.remove("dragging");
+          draggedId = null;
+          setTimeout(() => { didDrag = false; }, 0);
+        });
         card.querySelector(".delete-week-task").addEventListener("click", () => deleteWeeklyTask(item.id));
         list.appendChild(card);
       });
