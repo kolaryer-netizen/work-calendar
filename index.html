@@ -209,6 +209,20 @@
       font-size: 13px;
     }
     .count { color: var(--muted); font-size: 12px; }
+    .day-indicators { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; }
+    .notebook-mark {
+      width: 21px;
+      height: 21px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: #d96b6b;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+    }
 
     .chip {
       border-radius: 7px;
@@ -315,6 +329,38 @@
     }
     .week-task-summary:hover { background: #fafafa; }
     .week-task-card > .task-actions { padding-right: 10px; }
+    .notebook-library-view { display: none; min-height: 660px; padding: 18px; overflow: auto; }
+    .notebook-library-view.active { display: block; }
+    .notebook-library-head { margin-bottom: 14px; padding: 4px 2px; }
+    .notebook-library-head h3 { margin: 0; font-size: 20px; }
+    .notebook-library-head p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+    .notebook-library-list { display: grid; gap: 10px; }
+    .notebook-entry {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-left: 4px solid #78a995;
+      border-radius: 8px;
+      background: #fbfdfc;
+      text-align: left;
+    }
+    .notebook-entry:hover { background: #f0f7f4; border-color: #b9d2c7; }
+    .notebook-entry strong { display: block; margin-bottom: 7px; color: var(--ink); }
+    .notebook-entry p {
+      margin: 0;
+      color: #4b5563;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .notebook-library-locked { padding: 48px 20px; text-align: center; color: var(--muted); background: #f5f9f7; border: 1px dashed #c8d9d2; border-radius: 8px; }
+    .notebook-library-view .btn.primary { background: #5f927d; }
+    .notebook-library-view .btn.primary:hover { background: #4d7e6a; }
+    .main.notebook-library-mode { grid-template-columns: minmax(0, 1fr); }
+    .main.notebook-library-mode .side { display: none; }
     .hour-labels { background: #faf9f6; border-right: 1px solid var(--line); }
     .hour-label, .hour-row { min-height: 54px; border-bottom: 1px solid var(--line); padding: 8px 10px; color: var(--muted); font-size: 12px; }
     .hour-task { display: inline-flex; margin: 2px 6px 4px 0; border-radius: 7px; padding: 6px 8px; background: var(--accent-soft); color: #16488f; border-left: 4px solid var(--accent); }
@@ -387,6 +433,58 @@
     .text-btn:hover { background: #f1f3f5; color: var(--ink); }
     .text-btn.danger:hover { background: var(--red-soft); color: var(--red); }
     .empty { color: var(--muted); text-align: center; padding: 24px 10px; border: 1px dashed var(--line); border-radius: 8px; background: #fbfaf8; }
+
+    .notebook-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(42, 57, 64, .45);
+    }
+    .notebook-modal.hidden { display: none; }
+    .notebook-dialog {
+      width: min(560px, 100%);
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f9fcfb;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, .28);
+    }
+    .notebook-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #edf6f2;
+    }
+    .notebook-head h3 { margin: 0; font-size: 19px; }
+    .notebook-close { width: 36px; height: 36px; padding: 0; font-size: 22px; }
+    .notebook-body { padding: 18px; background: #f9fcfb; }
+    .notebook-lock { display: grid; gap: 10px; }
+    .notebook-lock p { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+    .notebook-editor textarea {
+      width: 100%;
+      min-height: 280px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      font: inherit;
+      line-height: 1.7;
+      color: var(--ink);
+      background: #fcfefd;
+      border-color: #c5d9d0;
+    }
+    .notebook-editor textarea:focus { outline: 2px solid #cfe4db; border-color: #78a995; }
+    .notebook-modal .btn.primary { background: #5f927d; }
+    .notebook-modal .btn.primary:hover { background: #4d7e6a; }
+    .notebook-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .notebook-message { min-height: 20px; color: var(--red); font-size: 13px; }
 
     @media (max-width: 1080px) {
       .app { grid-template-columns: 1fr; }
@@ -478,10 +576,11 @@
           <button class="btn tab active" data-view="month" type="button">月</button>
           <button class="btn tab" data-view="week" type="button">周</button>
           <button class="btn tab" data-view="weekTasks" type="button">任务列表</button>
+          <button class="btn tab" data-view="notebooks" type="button">记事本</button>
         </div>
       </header>
 
-      <section class="main">
+      <section class="main" id="mainLayout">
         <div class="panel">
           <div class="weekdays" id="weekdays">
             <div>周一</div><div>周二</div><div>周三</div><div>周四</div><div>周五</div><div>周六</div><div>周日</div>
@@ -489,6 +588,7 @@
           <div class="month" id="monthView"></div>
           <div class="week" id="weekView"></div>
           <div class="week-task-view" id="weekTaskView"></div>
+          <div class="notebook-library-view" id="notebookLibraryView"></div>
         </div>
 
         <aside class="panel side">
@@ -543,9 +643,44 @@
     </section>
   </main>
 
+  <div class="notebook-modal hidden" id="notebookModal" role="dialog" aria-modal="true" aria-labelledby="notebookTitle">
+    <section class="notebook-dialog">
+      <header class="notebook-head">
+        <h3 id="notebookTitle">日期记事本</h3>
+        <button class="btn notebook-close" id="notebookCloseBtn" type="button" aria-label="关闭">&times;</button>
+      </header>
+      <div class="notebook-body">
+        <div class="notebook-lock" id="notebookLock">
+          <p id="notebookHint">输入记事本密码后访问当天笔记。</p>
+          <div class="field">
+            <label for="notebookPassword">记事本密码</label>
+            <input id="notebookPassword" type="password" autocomplete="current-password">
+          </div>
+          <div class="field hidden" id="notebookConfirmField">
+            <label for="notebookPasswordConfirm">确认密码</label>
+            <input id="notebookPasswordConfirm" type="password" autocomplete="new-password">
+          </div>
+          <div class="notebook-message" id="notebookMessage"></div>
+          <button class="btn primary" id="notebookUnlockBtn" type="button">解锁记事本</button>
+        </div>
+        <div class="notebook-editor hidden" id="notebookEditor">
+          <textarea id="notebookText" placeholder="记录今天的想法、感受或需要记住的事情..."></textarea>
+          <div class="notebook-actions">
+            <button class="btn" id="notebookCancelBtn" type="button">关闭</button>
+            <button class="btn primary" id="notebookSaveBtn" type="button">保存笔记</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
   <script>
     const localTaskKey = "cloud-calendar-local-tasks-v1";
     const localWeeklyTaskKey = "cloud-calendar-weekly-tasks-v1";
+    const localNotebookKey = "cloud-calendar-encrypted-notes-v1";
+    const localNotebookVaultKey = "cloud-calendar-note-vault-v1";
+    const notebookRowPrefix = "__encrypted_daily_note__:";
+    const notebookVaultTitle = "__encrypted_note_vault__";
     const configKey = "cloud-calendar-supabase-config-v1";
     const embeddedSupabaseConfig = {
       url: "https://scxsrgneitktymuxbxtg.supabase.co",
@@ -558,6 +693,13 @@
       selected: new Date(),
       tasks: [],
       weeklyTasks: [],
+      notebooks: {},
+      notebookVault: null,
+      notebookDate: "",
+      notebookCryptoKey: null,
+      notebookMode: "date",
+      notebookUnlockUntil: 0,
+      notebookLockTimer: null,
       editingId: null,
       supabase: null,
       user: null,
@@ -587,9 +729,11 @@
       todayBtn: document.getElementById("todayBtn"),
       nextBtn: document.getElementById("nextBtn"),
       weekdays: document.getElementById("weekdays"),
+      mainLayout: document.getElementById("mainLayout"),
       monthView: document.getElementById("monthView"),
       weekView: document.getElementById("weekView"),
       weekTaskView: document.getElementById("weekTaskView"),
+      notebookLibraryView: document.getElementById("notebookLibraryView"),
       selectedTitle: document.getElementById("selectedTitle"),
       selectedSummary: document.getElementById("selectedSummary"),
       form: document.getElementById("taskForm"),
@@ -605,7 +749,21 @@
       taskList: document.getElementById("taskList"),
       weekTotal: document.getElementById("weekTotal"),
       weekDone: document.getElementById("weekDone"),
-      weekMilestones: document.getElementById("weekMilestones")
+      weekMilestones: document.getElementById("weekMilestones"),
+      notebookModal: document.getElementById("notebookModal"),
+      notebookTitle: document.getElementById("notebookTitle"),
+      notebookLock: document.getElementById("notebookLock"),
+      notebookHint: document.getElementById("notebookHint"),
+      notebookPassword: document.getElementById("notebookPassword"),
+      notebookConfirmField: document.getElementById("notebookConfirmField"),
+      notebookPasswordConfirm: document.getElementById("notebookPasswordConfirm"),
+      notebookMessage: document.getElementById("notebookMessage"),
+      notebookUnlockBtn: document.getElementById("notebookUnlockBtn"),
+      notebookEditor: document.getElementById("notebookEditor"),
+      notebookText: document.getElementById("notebookText"),
+      notebookCloseBtn: document.getElementById("notebookCloseBtn"),
+      notebookCancelBtn: document.getElementById("notebookCancelBtn"),
+      notebookSaveBtn: document.getElementById("notebookSaveBtn")
     };
 
     function pad(value) { return String(value).padStart(2, "0"); }
@@ -655,6 +813,67 @@
     function makeId() {
       if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
       return `task-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+    function bytesToBase64(bytes) {
+      let binary = "";
+      bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+      return btoa(binary);
+    }
+    function base64ToBytes(value) {
+      const binary = atob(value);
+      return Uint8Array.from(binary, char => char.charCodeAt(0));
+    }
+    async function deriveNotebookKey(password, saltBase64) {
+      const material = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        "PBKDF2",
+        false,
+        ["deriveBits"]
+      );
+      const bits = await crypto.subtle.deriveBits(
+        { name: "PBKDF2", salt: base64ToBytes(saltBase64), iterations: 180000, hash: "SHA-256" },
+        material,
+        256
+      );
+      const raw = new Uint8Array(bits);
+      const verifier = bytesToBase64(new Uint8Array(await crypto.subtle.digest("SHA-256", raw)));
+      const key = await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+      return { key, verifier };
+    }
+    async function encryptNotebookText(text, key) {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text));
+      return JSON.stringify({ iv: bytesToBase64(iv), data: bytesToBase64(new Uint8Array(encrypted)) });
+    }
+    async function decryptNotebookText(payload, key) {
+      if (!payload) return "";
+      const parsed = JSON.parse(payload);
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: base64ToBytes(parsed.iv) },
+        key,
+        base64ToBytes(parsed.data)
+      );
+      return new TextDecoder().decode(decrypted);
+    }
+    function notebookSessionActive() {
+      if (!state.notebookCryptoKey) return false;
+      if (Date.now() < state.notebookUnlockUntil) return true;
+      state.notebookCryptoKey = null;
+      state.notebookUnlockUntil = 0;
+      return false;
+    }
+    function refreshNotebookSession() {
+      if (!state.notebookCryptoKey) return;
+      state.notebookUnlockUntil = Date.now() + 10 * 60 * 1000;
+      if (state.notebookLockTimer) clearTimeout(state.notebookLockTimer);
+      state.notebookLockTimer = setTimeout(() => {
+        state.notebookCryptoKey = null;
+        state.notebookUnlockUntil = 0;
+        state.notebookLockTimer = null;
+        if (!els.notebookModal.classList.contains("hidden")) els.notebookModal.classList.add("hidden");
+        if (state.view === "notebooks") renderNotebookLibrary();
+      }, 10 * 60 * 1000);
     }
     function priorityLabel(value) {
       return {
@@ -771,16 +990,70 @@
         orderAt: row.created_at || ""
       };
     }
+    function notebookToDb(id, title, date, encryptedPayload) {
+      return {
+        id,
+        user_id: state.user.id,
+        title,
+        task_date: date,
+        task_end_date: date,
+        task_time: null,
+        task_type: "task",
+        task_scope: "day",
+        task_priority: "not_urgent_not_important",
+        note: encryptedPayload,
+        done: false
+      };
+    }
+    async function upsertNotebookCloud(id, title, date, encryptedPayload) {
+      if (!state.supabase || !state.user) return null;
+      const payload = notebookToDb(id, title, date, encryptedPayload);
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const result = await state.supabase.from("calendar_tasks").upsert(payload, { onConflict: "id" });
+        if (!result.error) return null;
+        const missing = (result.error.message || "").match(/task_(?:end_date|scope|priority)/i)?.[0];
+        if (!missing || !(missing in payload)) return result.error;
+        delete payload[missing];
+      }
+      return new Error("云端记事本字段不完整");
+    }
 
     function saveLocal() {
       localStorage.setItem(localTaskKey, JSON.stringify(state.tasks));
       localStorage.setItem(localWeeklyTaskKey, JSON.stringify(state.weeklyTasks));
+      localStorage.setItem(localNotebookKey, JSON.stringify(state.notebooks));
+      if (state.notebookVault) localStorage.setItem(localNotebookVaultKey, JSON.stringify(state.notebookVault));
     }
     function loadLocal() {
       try { state.tasks = JSON.parse(localStorage.getItem(localTaskKey) || "[]").map(normalizeTask); }
       catch { state.tasks = []; }
       try { state.weeklyTasks = JSON.parse(localStorage.getItem(localWeeklyTaskKey) || "[]"); }
       catch { state.weeklyTasks = []; }
+      try { state.notebooks = JSON.parse(localStorage.getItem(localNotebookKey) || "{}"); }
+      catch { state.notebooks = {}; }
+      try { state.notebookVault = JSON.parse(localStorage.getItem(localNotebookVaultKey) || "null"); }
+      catch { state.notebookVault = null; }
+    }
+
+    async function saveNotebookVault() {
+      saveLocal();
+      if (!state.notebookVault) return;
+      const error = await upsertNotebookCloud(
+        state.notebookVault.id,
+        notebookVaultTitle,
+        "2000-01-01",
+        JSON.stringify({ salt: state.notebookVault.salt, verifier: state.notebookVault.verifier })
+      );
+      if (error) setCloudStatus(`记事本密码同步失败：${error.message}`);
+    }
+
+    async function saveNotebookEntry(date, encryptedPayload) {
+      const existing = state.notebooks[date] || { id: makeId() };
+      state.notebooks[date] = { id: existing.id, encrypted: encryptedPayload };
+      saveLocal();
+      const error = await upsertNotebookCloud(existing.id, `${notebookRowPrefix}${date}`, date, encryptedPayload);
+      if (error) setCloudStatus(`笔记同步失败：${error.message}`);
+      else setCloudStatus("加密笔记已同步");
     }
 
     async function saveTask(task) {
@@ -877,7 +1150,19 @@
         setCloudStatus(`周任务读取失败：${weeklyError.message}`);
         return;
       }
-      state.tasks = data.map(fromDb);
+      const vaultRow = data.find(row => row.title === notebookVaultTitle);
+      const notebookRows = data.filter(row => row.title?.startsWith(notebookRowPrefix));
+      const taskRows = data.filter(row => row.title !== notebookVaultTitle && !row.title?.startsWith(notebookRowPrefix));
+      if (vaultRow) {
+        try {
+          const vault = JSON.parse(vaultRow.note || "{}");
+          state.notebookVault = { id: vaultRow.id, salt: vault.salt, verifier: vault.verifier };
+        } catch {}
+      }
+      if (notebookRows.length) {
+        state.notebooks = Object.fromEntries(notebookRows.map(row => [row.task_date, { id: row.id, encrypted: row.note || "" }]));
+      }
+      state.tasks = taskRows.map(fromDb);
       state.weeklyTasks = weeklyData.map(weeklyFromDb);
       saveLocal();
       setCloudStatus(`云端已连接，读取 ${state.tasks.length} 项任务、${state.weeklyTasks.length} 项周任务`);
@@ -898,6 +1183,10 @@
       if (state.weeklyTasks.length) {
         const { error } = await state.supabase.from("weekly_task_items").upsert(state.weeklyTasks.map(weeklyToDb), { onConflict: "id" });
         if (error) setCloudStatus(`本地周任务同步失败：${error.message}`);
+      }
+      if (state.notebookVault) await saveNotebookVault();
+      for (const [date, entry] of Object.entries(state.notebooks)) {
+        await upsertNotebookCloud(entry.id, `${notebookRowPrefix}${date}`, date, entry.encrypted || "");
       }
     }
 
@@ -954,6 +1243,143 @@
       }
     }
 
+    function closeNotebook() {
+      els.notebookModal.classList.add("hidden");
+      els.notebookPassword.value = "";
+      els.notebookPasswordConfirm.value = "";
+      els.notebookText.value = "";
+      els.notebookMessage.textContent = "";
+      state.notebookDate = "";
+      if (notebookSessionActive()) refreshNotebookSession();
+      if (state.view === "notebooks") renderNotebookLibrary();
+    }
+
+    function openNotebook(day) {
+      state.notebookMode = "date";
+      state.notebookDate = dateKey(day);
+      if (notebookSessionActive()) {
+        refreshNotebookSession();
+        openNotebookEntryFromLibrary(state.notebookDate);
+        return;
+      }
+      els.notebookTitle.textContent = `${formatCn(day)} · 记事本`;
+      els.notebookModal.classList.remove("hidden");
+      els.notebookLock.classList.remove("hidden");
+      els.notebookEditor.classList.add("hidden");
+      els.notebookMessage.textContent = "";
+      els.notebookPassword.value = "";
+      els.notebookPasswordConfirm.value = "";
+      const isSetup = !state.notebookVault;
+      els.notebookConfirmField.classList.toggle("hidden", !isSetup);
+      els.notebookHint.textContent = isSetup
+        ? "第一次使用，请设置一个独立的记事本密码。密码不会被保存，忘记后无法恢复笔记。"
+        : "输入记事本密码后访问当天笔记。";
+      els.notebookUnlockBtn.textContent = isSetup ? "设置密码并打开" : "解锁记事本";
+      setTimeout(() => els.notebookPassword.focus(), 0);
+    }
+
+    function openNotebookLibrary() {
+      state.notebookMode = "library";
+      state.notebookDate = "";
+      if (notebookSessionActive()) {
+        refreshNotebookSession();
+        renderNotebookLibrary();
+        return;
+      }
+      els.notebookTitle.textContent = "记事本";
+      els.notebookModal.classList.remove("hidden");
+      els.notebookLock.classList.remove("hidden");
+      els.notebookEditor.classList.add("hidden");
+      els.notebookMessage.textContent = "";
+      els.notebookPassword.value = "";
+      els.notebookPasswordConfirm.value = "";
+      const isSetup = !state.notebookVault;
+      els.notebookConfirmField.classList.toggle("hidden", !isSetup);
+      els.notebookHint.textContent = isSetup
+        ? "第一次使用，请设置一个独立的记事本密码。密码不会被保存，忘记后无法恢复笔记。"
+        : "输入密码后查看全部日期笔记。";
+      els.notebookUnlockBtn.textContent = isSetup ? "设置密码并打开" : "解锁记事本";
+      setTimeout(() => els.notebookPassword.focus(), 0);
+    }
+
+    async function openNotebookEntryFromLibrary(date) {
+      if (!notebookSessionActive()) return openNotebookLibrary();
+      refreshNotebookSession();
+      state.notebookMode = "date";
+      state.notebookDate = date;
+      els.notebookTitle.textContent = `${formatCn(parseDate(date))} · 记事本`;
+      els.notebookModal.classList.remove("hidden");
+      els.notebookLock.classList.add("hidden");
+      els.notebookEditor.classList.remove("hidden");
+      try {
+        els.notebookText.value = await decryptNotebookText(state.notebooks[date]?.encrypted || "", state.notebookCryptoKey);
+      } catch {
+        els.notebookText.value = "";
+      }
+      els.notebookText.focus();
+    }
+
+    async function unlockNotebook() {
+      const password = els.notebookPassword.value;
+      if (password.length < 4) {
+        els.notebookMessage.textContent = "密码至少需要 4 个字符。";
+        return;
+      }
+      els.notebookUnlockBtn.disabled = true;
+      els.notebookMessage.textContent = "正在解锁...";
+      try {
+        if (!state.notebookVault) {
+          if (password !== els.notebookPasswordConfirm.value) throw new Error("两次输入的密码不一致。");
+          const salt = bytesToBase64(crypto.getRandomValues(new Uint8Array(16)));
+          const derived = await deriveNotebookKey(password, salt);
+          state.notebookVault = { id: makeId(), salt, verifier: derived.verifier };
+          state.notebookCryptoKey = derived.key;
+          await saveNotebookVault();
+        } else {
+          const derived = await deriveNotebookKey(password, state.notebookVault.salt);
+          if (derived.verifier !== state.notebookVault.verifier) throw new Error("密码不正确。");
+          state.notebookCryptoKey = derived.key;
+        }
+        refreshNotebookSession();
+        if (state.notebookMode === "library") {
+          els.notebookModal.classList.add("hidden");
+          els.notebookPassword.value = "";
+          els.notebookPasswordConfirm.value = "";
+          renderNotebookLibrary();
+          return;
+        }
+        const entry = state.notebooks[state.notebookDate];
+        els.notebookText.value = entry?.encrypted
+          ? await decryptNotebookText(entry.encrypted, state.notebookCryptoKey)
+          : "";
+        els.notebookLock.classList.add("hidden");
+        els.notebookEditor.classList.remove("hidden");
+        els.notebookMessage.textContent = "";
+        els.notebookText.focus();
+      } catch (error) {
+        state.notebookCryptoKey = null;
+        els.notebookMessage.textContent = error.message || "记事本解锁失败。";
+      } finally {
+        els.notebookUnlockBtn.disabled = false;
+      }
+    }
+
+    async function saveOpenNotebook() {
+      if (!state.notebookDate || !notebookSessionActive()) return;
+      refreshNotebookSession();
+      els.notebookSaveBtn.disabled = true;
+      try {
+        const encrypted = await encryptNotebookText(els.notebookText.value, state.notebookCryptoKey);
+        await saveNotebookEntry(state.notebookDate, encrypted);
+        closeNotebook();
+        render();
+      } catch (error) {
+        els.notebookMessage.textContent = error.message || "笔记保存失败。";
+      } finally {
+        els.notebookSaveBtn.disabled = false;
+      }
+    }
+
     function render() {
       els.todayText.textContent = formatCn(new Date());
       els.form.classList.toggle("hidden", state.view !== "weekTasks");
@@ -987,16 +1413,62 @@
         els.periodTitle.textContent = `${start.getMonth() + 1}月${start.getDate()}日 - ${end.getMonth() + 1}月${end.getDate()}日`;
         els.periodSubtitle.textContent = "先列出本周工作，再安排到具体日期";
       }
+      if (state.view === "notebooks") {
+        els.periodTitle.textContent = "记事本";
+        els.periodSubtitle.textContent = "按日期从近到远查看记录和感想";
+      }
     }
 
     function renderCalendar() {
+      els.mainLayout.classList.toggle("notebook-library-mode", state.view === "notebooks");
       els.weekdays.style.display = state.view === "month" ? "grid" : "none";
       els.monthView.style.display = state.view === "month" ? "grid" : "none";
       els.weekView.classList.toggle("active", state.view === "week");
       els.weekTaskView.classList.toggle("active", state.view === "weekTasks");
+      els.notebookLibraryView.classList.toggle("active", state.view === "notebooks");
       renderMonth();
       renderWeek();
       renderWeekTasks();
+      if (state.view === "notebooks") renderNotebookLibrary();
+    }
+
+    async function renderNotebookLibrary() {
+      if (state.view !== "notebooks") return;
+      if (!notebookSessionActive()) {
+        els.notebookLibraryView.innerHTML = `
+          <div class="notebook-library-head"><h3>全部笔记</h3><p>笔记已加密，请先输入密码。</p></div>
+          <div class="notebook-library-locked">
+            <button class="btn primary unlock-library" type="button">输入密码查看</button>
+          </div>`;
+        els.notebookLibraryView.querySelector(".unlock-library").addEventListener("click", openNotebookLibrary);
+        return;
+      }
+      const key = state.notebookCryptoKey;
+      const dates = Object.keys(state.notebooks).sort((a, b) => b.localeCompare(a));
+      els.notebookLibraryView.innerHTML = `
+        <div class="notebook-library-head"><h3>全部笔记</h3><p>${dates.length} 篇，日期从近到远排列</p></div>
+        <div class="notebook-library-list"></div>`;
+      const list = els.notebookLibraryView.querySelector(".notebook-library-list");
+      if (!dates.length) {
+        list.innerHTML = `<div class="empty">还没有笔记，可以从月历点击日期开始记录</div>`;
+        return;
+      }
+      for (const date of dates) {
+        let content = "";
+        try { content = await decryptNotebookText(state.notebooks[date].encrypted, key); }
+        catch { content = "无法解密这篇笔记"; }
+        if (state.notebookCryptoKey !== key || state.view !== "notebooks") return;
+        const entry = document.createElement("button");
+        entry.type = "button";
+        entry.className = "notebook-entry";
+        const title = document.createElement("strong");
+        title.textContent = formatCn(parseDate(date));
+        const preview = document.createElement("p");
+        preview.textContent = content || "空白笔记";
+        entry.append(title, preview);
+        entry.addEventListener("click", () => openNotebookEntryFromLibrary(date));
+        list.appendChild(entry);
+      }
     }
 
     function renderMonth() {
@@ -1009,7 +1481,8 @@
         if (day.getMonth() !== state.cursor.getMonth()) cell.classList.add("muted");
         if (sameDay(day, new Date())) cell.classList.add("today");
         if (sameDay(day, state.selected)) cell.classList.add("selected");
-        cell.innerHTML = `<div class="day-head"><span class="num">${day.getDate()}</span><span class="count">${tasks.length ? tasks.length + "项" : ""}</span></div>`;
+        const hasNotebook = !!state.notebooks[dateKey(day)]?.encrypted;
+        cell.innerHTML = `<div class="day-head"><span class="num">${day.getDate()}</span><span class="day-indicators">${hasNotebook ? '<span class="notebook-mark">记</span>' : ""}<span class="count">${tasks.length ? tasks.length + "项" : ""}</span></span></div>`;
         tasks.slice(0, 3).forEach(task => {
           const chip = document.createElement("div");
           chip.className = `chip ${rangeClass(task, day)} q-${task.priority || "important_urgent"} ${isTaskDoneOnDay(task, day) ? "done" : ""} ${task.type === "milestone" ? "milestone" : ""}`;
@@ -1020,6 +1493,7 @@
           state.selected = day;
           state.cursor = day;
           render();
+          openNotebook(day);
         });
         els.monthView.appendChild(cell);
       });
@@ -1254,12 +1728,15 @@
 
     document.querySelectorAll(".tab[data-view]").forEach(button => {
       button.addEventListener("click", () => {
-        state.view = button.dataset.view;
+        const nextView = button.dataset.view;
+        state.view = nextView;
         render();
+        if (nextView === "notebooks") openNotebookLibrary();
       });
     });
 
     els.prevBtn.addEventListener("click", () => {
+      if (state.view === "notebooks") return;
       state.cursor = state.view === "month"
         ? new Date(state.cursor.getFullYear(), state.cursor.getMonth() - 1, 1)
         : addDays(state.cursor, -7);
@@ -1268,6 +1745,7 @@
     });
 
     els.nextBtn.addEventListener("click", () => {
+      if (state.view === "notebooks") return;
       state.cursor = state.view === "month"
         ? new Date(state.cursor.getFullYear(), state.cursor.getMonth() + 1, 1)
         : addDays(state.cursor, 7);
@@ -1309,6 +1787,27 @@
     els.endDate.addEventListener("change", () => {
       els.priority.focus();
       try { els.priority.showPicker?.(); } catch {}
+    });
+
+    els.notebookUnlockBtn.addEventListener("click", unlockNotebook);
+    els.notebookPassword.addEventListener("keydown", event => {
+      if (event.key === "Enter") unlockNotebook();
+    });
+    els.notebookPasswordConfirm.addEventListener("keydown", event => {
+      if (event.key === "Enter") unlockNotebook();
+    });
+    els.notebookSaveBtn.addEventListener("click", saveOpenNotebook);
+    els.notebookCloseBtn.addEventListener("click", closeNotebook);
+    els.notebookCancelBtn.addEventListener("click", closeNotebook);
+    els.notebookModal.addEventListener("click", event => {
+      if (event.target === els.notebookModal) closeNotebook();
+    });
+    document.addEventListener("pointerdown", () => {
+      if (notebookSessionActive()) refreshNotebookSession();
+    });
+    document.addEventListener("keydown", event => {
+      if (notebookSessionActive()) refreshNotebookSession();
+      if (event.key === "Escape" && !els.notebookModal.classList.contains("hidden")) closeNotebook();
     });
 
     els.form.addEventListener("submit", async event => {
